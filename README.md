@@ -13,6 +13,8 @@ DSH 在命令需要更高权限（例如沙箱拒绝后升级）时会发起一�
 
 这个插件在**每个待审批请求**出现时发一条系统通知：
 
+**只在你不看这个页面时提醒。** 页面可见且处于前台（你正看着对话）时不发通知——审批面板本来就在屏上；页面切到后台、最小化或失去焦点时才提醒。回到页面后，已经弹出的通知会自动关闭。
+
 - 标题：`需要审批`
 - 正文：请求方给出的原因（或“工具 `pwsh` 请求以更高权限执行”）+ 所属会话名
 - 点击通知：切回对应的会话，并把 Edge 窗口带到前台
@@ -68,6 +70,7 @@ dsh plugin --profile web remove dsh-approval-reminder
 | 关注点 | 做法 |
 | --- | --- |
 | 待审批状态来源 | 订阅 `uiSession.sessionStatus`（`getSnapshot` / `subscribe` 的纯 observable），筛出 `pendingInteraction.kind === 'approval'` 的会话 |
+| 提醒时机 | `document.visibilityState === 'visible' && document.hasFocus()` 视为“正在看页面”→ 静默；在 `visibilitychange` / `focus` / `blur` 时重新判断，所以离开页面后才懒提醒；同一请求只提醒一次，回到页面即关闭已弹出的通知 |
 | 通知 | `new Notification(title, { body, tag, requireInteraction: true })`，`tag` 按会话去重 |
 | 点击行为 | `uiWorkspace.openSession(sessionId)` + `window.focus()` |
 | 去重 | 每个 `sessionId + request key` 只通知一次；构造失败也记录，避免每次快照变化都重试 |

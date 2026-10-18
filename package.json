@@ -1,6 +1,6 @@
 {
   "name": "dsh-approval-reminder",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "在 DeepSeek Harness Web 中，当命令等待审批时通过 Edge/Windows 桌面通知提醒。",

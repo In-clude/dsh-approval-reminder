@@ -27,7 +27,7 @@ window.__ModuleLoader__.load({
       'notify.test.title': '审批桌面通知',
       'notify.test.body': '通知通道可用：命令等待审批时会在这里提醒你。',
       'row.title': '审批桌面通知',
-      'row.description': '命令等待审批时，用 Edge 桌面通知提醒你；需保持本页面打开（可最小化）。',
+      'row.description': '只在你没看这个页面时提醒：命令等待审批、而本页面在后台或未聚焦时，用 Edge 桌面通知提醒你。',
       'row.granted': '已开启',
       'row.default': '未开启',
       'row.denied': '已被浏览器阻止',
@@ -47,7 +47,7 @@ window.__ModuleLoader__.load({
       'notify.test.title': 'Approval desktop notifications',
       'notify.test.body': 'The channel works: a command waiting for approval will appear here.',
       'row.title': 'Approval desktop notifications',
-      'row.description': 'Notify me through an Edge desktop notification while a command waits for approval. Keep this page open (it may be minimized).',
+      'row.description': 'Notify me only while I am not looking at this page: an Edge desktop notification appears when a command waits for approval while this page is in the background or unfocused.',
       'row.granted': 'Enabled',
       'row.default': 'Off',
       'row.denied': 'Blocked by the browser',
@@ -84,6 +84,24 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * Whether the user is looking at this page right now. While it is true the
+     * Host approval panel is on screen, so a desktop notification would only be
+     * noise; the reminder waits until the page is in the background or
+     * unfocused.
+     * @returns true when the page is visible and holds focus
+     */
+    function isViewingPage() {
+      if (typeof document === 'undefined' || document.visibilityState !== 'visible') return false;
+      if (typeof document.hasFocus !== 'function') return true;
+      return document.hasFocus();
+    }
+
+    /** Stable identity of one pending request, used for deduplication. */
+    function requestKey(sessionId, interaction) {
+      return String(interaction.key === undefined ? sessionId : interaction.key);
+    }
+
+    /**
      * One desktop notification per pending approval, keyed by Session identity
      * and request key. Nothing is raised while the notification permission is
      * not granted; the next snapshot change after granting flushes the backlog.
@@ -92,7 +110,10 @@ window.__ModuleLoader__.load({
       constructor(deps) {
         this.deps = deps;
         this.status = undefined;
+        /** Open desktop notifications, keyed by Session identity. */
         this.notified = new Map();
+        /** Requests already announced, so leaving the page again cannot nag twice. */
+        this.delivered = new Map();
       }
 
       /**
@@ -107,27 +128,53 @@ window.__ModuleLoader__.load({
         return dispose;
       }
 
-      /** Close settled notifications and raise the ones that are still pending. */
+      /**
+       * Recompute from the snapshot: close what settled or was seen, and raise
+       * a notification for each request the user has not been told about while
+       * the page is not being viewed.
+       */
       sync() {
         if (this.status === undefined) return;
-        const snapshot = this.status.getSnapshot();
+        const pending = this.collect();
+        this.reconcile(pending);
+        if (isViewingPage()) {
+          // The Host approval panel is on screen; a toast would be noise.
+          for (const sessionId of [...this.notified.keys()]) this.close(sessionId);
+          return;
+        }
+        if (readPermission() !== 'granted') return;
+        for (const [sessionId, interaction] of pending) {
+          const key = requestKey(sessionId, interaction);
+          if (this.delivered.get(sessionId) === key) continue;
+          this.delivered.set(sessionId, key);
+          this.raise(sessionId, interaction);
+        }
+      }
+
+      /** Pending approval interactions, keyed by Session identity. */
+      collect() {
         const pending = new Map();
-        for (const [sessionId, status] of snapshot) {
+        for (const [sessionId, status] of this.status.getSnapshot()) {
           const interaction = status === undefined ? undefined : status.pendingInteraction;
           if (interaction === undefined || interaction === null) continue;
           if (interaction.kind !== 'approval') continue;
           pending.set(sessionId, interaction);
         }
+        return pending;
+      }
+
+      /** Forget requests that settled or were replaced. */
+      reconcile(pending) {
         for (const sessionId of [...this.notified.keys()]) {
           const entry = this.notified.get(sessionId);
           const current = pending.get(sessionId);
-          if (current !== undefined && String(current.key) === entry.key) continue;
+          if (current !== undefined && requestKey(sessionId, current) === entry.key) continue;
           this.close(sessionId);
         }
-        if (readPermission() !== 'granted') return;
-        for (const [sessionId, interaction] of pending) {
-          if (this.notified.has(sessionId)) continue;
-          this.raise(sessionId, interaction);
+        for (const sessionId of [...this.delivered.keys()]) {
+          const current = pending.get(sessionId);
+          if (current !== undefined && requestKey(sessionId, current) === this.delivered.get(sessionId)) continue;
+          this.delivered.delete(sessionId);
         }
       }
 
@@ -175,6 +222,7 @@ window.__ModuleLoader__.load({
       /** Close every notification this plugin raised. */
       dispose() {
         for (const sessionId of [...this.notified.keys()]) this.close(sessionId);
+        this.delivered.clear();
       }
 
       close(sessionId) {
@@ -194,7 +242,7 @@ window.__ModuleLoader__.load({
         });
         const body = reason === '' ? sessionLine : reason + '\n' + sessionLine;
         const entry = {
-          key: String(interaction.key === undefined ? sessionId : interaction.key),
+          key: requestKey(sessionId, interaction),
           notification: null,
         };
         // Record before constructing: a refused construction must not be
@@ -325,8 +373,8 @@ window.__ModuleLoader__.load({
     const inject = ['slots', 'locale'];
 
     /**
-     * Install the notification channel, the permission gesture, and the
-     * General-settings row.
+     * Install the notification channel (silent while the page is being viewed),
+     * the permission gesture, and the General-settings row.
      * @param ctx - Client root context.
      */
     function apply(ctx) {
@@ -363,6 +411,21 @@ window.__ModuleLoader__.load({
         scope.effect(() => notifier.watch(status), 'approval-reminder: pending approvals');
         scope.effect(() => () => notifier.dispose(), 'approval-reminder: notifications');
       });
+
+      ctx.effect(() => {
+        // "Looking at the page" is re-evaluated whenever it can change, so a
+        // request that arrived while the user was reading is still announced
+        // once the page goes to the background.
+        const onViewChange = () => { notifier.sync(); };
+        document.addEventListener('visibilitychange', onViewChange);
+        window.addEventListener('focus', onViewChange);
+        window.addEventListener('blur', onViewChange);
+        return () => {
+          document.removeEventListener('visibilitychange', onViewChange);
+          window.removeEventListener('focus', onViewChange);
+          window.removeEventListener('blur', onViewChange);
+        };
+      }, 'approval-reminder: page visibility');
 
       ctx.effect(() => installPermissionGesture(notifier), 'approval-reminder: permission gesture');
 

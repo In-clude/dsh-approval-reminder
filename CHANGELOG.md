@@ -3,6 +3,19 @@
 本项目的显著变更记录在这里，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [0.2.0] - 2026-10-18
+
+### Changed
+
+- 提醒时机收敛为“只在你不看这个页面时”：页面可见且处于前台（`document.hasFocus()`）
+  时不发通知，因为宿主审批面板已经在屏上；页面切到后台、最小化或失焦时才提醒。
+
+### Added
+
+- 在 `visibilitychange` / `focus` / `blur` 时重新评估页面状态：请求在你看页面时到达，
+  等你切走后才提醒；回到页面时已弹出的通知自动关闭。
+- 同一请求只提醒一次（按 `sessionId + request key` 记录），来回切页面不会反复刷屏。
+
 ## [0.1.0] - 2026-10-18
 
 ### Added
