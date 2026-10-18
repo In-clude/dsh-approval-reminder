@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Approval reminder">
+  <rect width="64" height="64" rx="14" fill="#1f2a44"/>
+  <path d="M32 14c-6.4 0-11.5 5.1-11.5 11.5v7.2c0 1.9-.8 3.8-2.1 5.1l-1.9 1.9c-1.1 1.1-.3 3 1.3 3h28.4c1.6 0 2.4-1.9 1.3-3l-1.9-1.9a7.2 7.2 0 0 1-2.1-5.1v-7.2C43.5 19.1 38.4 14 32 14z" fill="#f2b233"/>
+  <path d="M27 44.5a5 5 0 0 0 10 0z" fill="#f2b233"/>
+  <circle cx="46" cy="19" r="6.5" fill="#e5484d" stroke="#1f2a44" stroke-width="2.5"/>
+</svg>

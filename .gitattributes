@@ -1,0 +1,9 @@
+# Normalize line endings so the served bundle is byte-identical across clones.
+* text=auto eol=lf
+
+*.js text eol=lf
+*.mjs text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.md text eol=lf
+*.svg text eol=lf

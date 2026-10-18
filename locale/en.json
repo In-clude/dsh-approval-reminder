@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Approval desktop notifications",
+    "description": "Raise an Edge/Windows desktop notification while a command waits for approval."
+  }
+}

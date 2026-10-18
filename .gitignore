@@ -1,0 +1,17 @@
+# Dependencies (only present if someone runs pnpm here while testing).
+node_modules/
+
+# Local DSH runtime artifacts.
+.plugin-manager/
+
+# Logs and environment files.
+*.log
+.env
+.env.*
+
+# Editor and OS noise.
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

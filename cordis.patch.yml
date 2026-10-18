@@ -1,0 +1,8 @@
+# dsh-approval-reminder 的 Loader 层。
+#
+# 这是本包的 `dsh.bundle.patch`：作为 bundle 安装时，bundle 层会插入下面这一行
+# 插件条目（宿主半侧是空壳，UI/通知全部在 client.js 里）。行 id 与包名分开命名，
+# 便于 profile 自己的 patch 层按 id 覆盖配置。
+- insert:
+    - id: approval-reminder
+      name: 'dsh-approval-reminder'

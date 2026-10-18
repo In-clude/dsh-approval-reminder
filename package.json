@@ -1,0 +1,69 @@
+{
+  "name": "dsh-approval-reminder",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "在 DeepSeek Harness Web 中，当命令等待审批时通过 Edge/Windows 桌面通知提醒。",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "approval",
+    "notifications",
+    "edge",
+    "windows"
+  ],
+  "author": "In-clude",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/In-clude/dsh-approval-reminder.git"
+  },
+  "bugs": {
+    "url": "https://github.com/In-clude/dsh-approval-reminder/issues"
+  },
+  "homepage": "https://github.com/In-clude/dsh-approval-reminder#readme",
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "./index.js",
+  "icon": "./icon.svg",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "locale/en.json",
+    "locale/zh.json",
+    "scripts/check.mjs",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "check": "node scripts/check.mjs",
+    "test": "node scripts/check.mjs"
+  },
+  "dsh": {
+    "manifestVersion": 1,
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-ui-session",
+        "@deepseek-ai/dsh-client-ui-settings-general"
+      ]
+    }
+  }
+}

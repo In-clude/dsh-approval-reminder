@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "审批桌面通知",
+    "description": "命令等待审批时，通过 Edge/Windows 桌面通知提醒你。"
+  }
+}
