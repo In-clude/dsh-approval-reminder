@@ -98,6 +98,17 @@ node scripts/check.mjs   # 或 npm test
 
 检查内容：manifest 字段、`exports` 指向的文件、locale 元数据、patch 行、两个 JS 文件的语法（`node:vm` 编译检查，不执行代码）。
 
+## 验证状态
+
+在 Windows + Edge（DSH Web `127.0.0.1`）上实测通过：
+
+- 命令等待审批时**弹出** Edge/Windows 桌面通知；
+- **点击**通知后该通知消失（同时切回对应会话、聚焦窗口）；
+- 审批作出决定（允许或拒绝）后，插件会关闭该请求对应的通知；
+- 设置 → 通用 的「发送测试通知」可独立验证通道。
+
+未覆盖：headless / API 会话、页面关闭后的提醒、macOS / Linux 桌面通知、多标签页同时打开时的表现。
+
 ## 已知限制
 
 - 仅对**浏览器会话**生效；headless / API 会话没有通知。
