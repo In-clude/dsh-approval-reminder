@@ -3,6 +3,23 @@
 本项目的显著变更记录在这里，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [0.2.1] - 2026-10-21
+
+### Added
+
+- `client.js` 顶部改用 `// @ts-check`，配合 `jsconfig.json`（`checkJs`、`strict`）与
+  `types/*.d.ts` 本地声明：模块加载器的 `require('react')`、`window.__ModuleLoader__`、
+  以及 DSH 客户端契约（`uiSession.sessionStatus`、pending interaction、locale、slots）
+  都有类型，编辑器里可直接看到错误与补全，且不引入任何 Harness 客户端包。
+- 英文文案表用 `@type {typeof zh}` 约束，缺键/错键变成类型错误。
+- `npm run typecheck`（`tsc -p jsconfig.json`）与 CI 的 npm 缓存 + 类型检查步骤；
+  `npm test` 现在是「类型检查 + 静态检查」。
+
+### Changed
+
+- 设置行状态色的选择器从 `data-state` 属性改为 `dsh-approval-reminder-status--<state>`
+  修饰类（视觉不变，避免在无 JSX 的属性对象里放非标准属性）。
+
 ## [0.2.0] - 2026-10-18
 
 ### Changed

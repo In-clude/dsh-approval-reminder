@@ -186,6 +186,25 @@ if (hostParsed && !readText('index.js').includes('export function apply')) {
   pass('host: exports apply');
 }
 
+// ---- type checking opt-in ---------------------------------------------------
+if (assertFile('jsconfig.json', 'typecheck')) {
+  const config = readJson('jsconfig.json');
+  if (config !== undefined && config.compilerOptions !== undefined && config.compilerOptions.checkJs === true) {
+    pass('typecheck: jsconfig.json enables checkJs');
+  } else {
+    fail('typecheck: jsconfig.json must set compilerOptions.checkJs to true');
+  }
+}
+
+{
+  const firstLine = readText('client.js').split('\n')[0].trim();
+  if (firstLine === '// @ts-check') {
+    pass('typecheck: client.js opts in with // @ts-check');
+  } else {
+    fail('typecheck: client.js must start with // @ts-check — that directive is what makes editors and `npm run typecheck` check the file');
+  }
+}
+
 // ---- report -----------------------------------------------------------------
 for (const line of passes) console.log(`ok   ${line}`);
 if (failures.length > 0) {

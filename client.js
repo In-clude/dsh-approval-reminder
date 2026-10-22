@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * dsh-approval-reminder — browser half.
  *
@@ -38,7 +39,11 @@ window.__ModuleLoader__.load({
       'hint.unsupported': '桌面通知需要 https 或 localhost 的安全上下文，并使用支持通知的浏览器。',
     };
 
-    /** English dictionary, checked against the Chinese key set. */
+    /**
+     * English dictionary. `@type` makes a missing or misspelled key a type
+     * error against the Chinese key set above.
+     * @type {typeof zh}
+     */
     const en = {
       'notify.title': 'Approval needed',
       'notify.body': 'Tool {toolName} requests privileged execution',
@@ -71,14 +76,14 @@ window.__ModuleLoader__.load({
       '.dsh-approval-reminder-hint{margin-top:4px;font-size:12px;line-height:18px;color:var(--dsw-alias-state-warn-primary)}',
       '.dsh-approval-reminder-actions{display:flex;align-items:center;gap:8px;flex:none}',
       '.dsh-approval-reminder-status{font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary)}',
-      '.dsh-approval-reminder-status[data-state="granted"]{color:var(--dsw-alias-state-success-primary)}',
-      '.dsh-approval-reminder-status[data-state="denied"]{color:var(--dsw-alias-state-error-primary)}',
+      '.dsh-approval-reminder-status--granted{color:var(--dsw-alias-state-success-primary)}',
+      '.dsh-approval-reminder-status--denied{color:var(--dsw-alias-state-error-primary)}',
       '.dsh-approval-reminder-button{height:28px;padding:0 12px;border:.5px solid var(--dsw-alias-border-l2);border-radius:8px;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:18px;cursor:pointer}',
       '.dsh-approval-reminder-button:hover:not(:disabled){background:var(--dsw-alias-bg-layer-1)}',
       '.dsh-approval-reminder-button:disabled{cursor:not-allowed;opacity:.4}',
     ].join('');
 
-    /** @returns {'granted' | 'denied' | 'default' | 'unsupported'} */
+    /** @returns {ApprovalPermission} */
     function readPermission() {
       return typeof Notification === 'undefined' ? 'unsupported' : Notification.permission;
     }
@@ -96,7 +101,12 @@ window.__ModuleLoader__.load({
       return document.hasFocus();
     }
 
-    /** Stable identity of one pending request, used for deduplication. */
+    /**
+     * Stable identity of one pending request, used for deduplication.
+     * @param {string} sessionId
+     * @param {ApprovalInteraction} interaction
+     * @returns {string}
+     */
     function requestKey(sessionId, interaction) {
       return String(interaction.key === undefined ? sessionId : interaction.key);
     }
@@ -107,19 +117,27 @@ window.__ModuleLoader__.load({
      * not granted; the next snapshot change after granting flushes the backlog.
      */
     class ApprovalNotifier {
+      /** @param {NotifierDeps} deps */
       constructor(deps) {
         this.deps = deps;
+        /** @type {SessionStatusObservable | undefined} */
         this.status = undefined;
-        /** Open desktop notifications, keyed by Session identity. */
+        /**
+         * Open desktop notifications, keyed by Session identity.
+         * @type {Map<string, { key: string, notification: Notification | null }>}
+         */
         this.notified = new Map();
-        /** Requests already announced, so leaving the page again cannot nag twice. */
+        /**
+         * Requests already announced, so leaving the page again cannot nag twice.
+         * @type {Map<string, string>}
+         */
         this.delivered = new Map();
       }
 
       /**
        * Follow the Session status snapshot.
-       * @param {{ getSnapshot: () => Map<string, object>, subscribe: (fn: () => void) => () => void }} observable
-       * @returns disposer stopping the subscription
+       * @param {SessionStatusObservable} observable
+       * @returns {() => void} disposer stopping the subscription
        */
       watch(observable) {
         this.status = observable;
@@ -151,10 +169,16 @@ window.__ModuleLoader__.load({
         }
       }
 
-      /** Pending approval interactions, keyed by Session identity. */
+      /**
+       * Pending approval interactions, keyed by Session identity.
+       * @returns {Map<string, ApprovalInteraction>}
+       */
       collect() {
+        /** @type {Map<string, ApprovalInteraction>} */
         const pending = new Map();
-        for (const [sessionId, status] of this.status.getSnapshot()) {
+        const observable = this.status;
+        if (observable === undefined) return pending;
+        for (const [sessionId, status] of observable.getSnapshot()) {
           const interaction = status === undefined ? undefined : status.pendingInteraction;
           if (interaction === undefined || interaction === null) continue;
           if (interaction.kind !== 'approval') continue;
@@ -163,10 +187,14 @@ window.__ModuleLoader__.load({
         return pending;
       }
 
-      /** Forget requests that settled or were replaced. */
+      /**
+       * Forget requests that settled or were replaced.
+       * @param {Map<string, ApprovalInteraction>} pending
+       */
       reconcile(pending) {
         for (const sessionId of [...this.notified.keys()]) {
           const entry = this.notified.get(sessionId);
+          if (entry === undefined) continue;
           const current = pending.get(sessionId);
           if (current !== undefined && requestKey(sessionId, current) === entry.key) continue;
           this.close(sessionId);
@@ -181,14 +209,14 @@ window.__ModuleLoader__.load({
       /**
        * Ask the browser for the notification permission. Requires a user
        * gesture; without one the call resolves without prompting.
-       * @returns the permission observed after the request
+       * @returns {Promise<ApprovalPermission>} the permission observed after the request
        */
       requestPermission() {
         if (readPermission() !== 'default') return Promise.resolve(readPermission());
         try {
           return Promise.resolve(Notification.requestPermission()).then((value) => {
             this.sync();
-            return typeof value === 'string' ? value : readPermission();
+            return value;
           }, (error) => {
             this.deps.report(error);
             return readPermission();
@@ -202,7 +230,7 @@ window.__ModuleLoader__.load({
       /**
        * Raise one unfiltered notification so the user can prove the channel
        * works without waiting for a real approval request.
-       * @returns whether a notification was created
+       * @returns {boolean} whether a notification was created
        */
       test() {
         if (readPermission() !== 'granted') return false;
@@ -225,6 +253,9 @@ window.__ModuleLoader__.load({
         this.delivered.clear();
       }
 
+      /**
+       * @param {string} sessionId
+       */
       close(sessionId) {
         const entry = this.notified.get(sessionId);
         if (entry === undefined) return;
@@ -233,6 +264,10 @@ window.__ModuleLoader__.load({
         try { entry.notification.close(); } catch (_error) { /* already closed */ }
       }
 
+      /**
+       * @param {string} sessionId
+       * @param {ApprovalInteraction} interaction
+       */
       raise(sessionId, interaction) {
         const t = this.deps.translate();
         const reason = this.describe(interaction, t);
@@ -241,6 +276,7 @@ window.__ModuleLoader__.load({
           title: typeof title === 'string' && title !== '' ? title : t('notify.untitled'),
         });
         const body = reason === '' ? sessionLine : reason + '\n' + sessionLine;
+        /** @type {{ key: string, notification: Notification | null }} */
         const entry = {
           key: requestKey(sessionId, interaction),
           notification: null,
@@ -265,7 +301,12 @@ window.__ModuleLoader__.load({
         }
       }
 
-      /** Human copy for one request: localized reason, raw reason, then tool name. */
+      /**
+       * Human copy for one request: localized reason, raw reason, then tool name.
+       * @param {ApprovalInteraction} interaction
+       * @param {Translate} t
+       * @returns {string}
+       */
       describe(interaction, t) {
         if (interaction.displayReason !== undefined && interaction.displayReason !== null) {
           const text = this.deps.resolveText(interaction.displayReason);
@@ -282,7 +323,7 @@ window.__ModuleLoader__.load({
      * page load. Chromium refuses the request without user activation, so this
      * is the only moment the plugin may prompt without a settings visit.
      * @param {ApprovalNotifier} notifier
-     * @returns disposer removing the listeners
+     * @returns {() => void} disposer removing the listeners
      */
     function installPermissionGesture(notifier) {
       const options = { capture: true, passive: true };
@@ -302,8 +343,8 @@ window.__ModuleLoader__.load({
     /**
      * General-settings row: current permission state, the enable path, and a
      * test notification.
-     * @param props - slot props: the localized `t` and the injected face.
-     * @returns the preference row.
+     * @param {ApprovalReminderRowProps} props slot props: the localized `t` and the injected face.
+     * @returns {import('react').ReactElement} the preference row.
      */
     function ApprovalReminderRow(props) {
       const t = props.t;
@@ -316,7 +357,7 @@ window.__ModuleLoader__.load({
         Promise.resolve(props.requestPermission()).then(
           (value) => {
             setBusy(false);
-            setPermission(typeof value === 'string' ? value : readPermission());
+            setPermission(value);
           },
           () => {
             setBusy(false);
@@ -333,11 +374,11 @@ window.__ModuleLoader__.load({
         : permission === 'unsupported' ? t('hint.unsupported')
           : null;
 
+      /** @type {import('react').ReactElement[]} */
       const actions = [
         h('span', {
           key: 'status',
-          className: 'dsh-approval-reminder-status',
-          'data-state': permission,
+          className: 'dsh-approval-reminder-status dsh-approval-reminder-status--' + permission,
         }, t(statusKey)),
       ];
       if (permission === 'default') {
@@ -375,13 +416,14 @@ window.__ModuleLoader__.load({
     /**
      * Install the notification channel (silent while the page is being viewed),
      * the permission gesture, and the General-settings row.
-     * @param ctx - Client root context.
+     * @param {ClientPluginContext} ctx Client root context.
      */
     function apply(ctx) {
       ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'approval-reminder: dictionaries');
 
       const t = ctx.locale.bind(NS);
-      const notifier = new ApprovalNotifier({
+      /** @type {NotifierDeps} */
+      const deps = {
         translate: () => t,
         resolveText: (text) => ctx.locale.resolveText(text),
         openSession: (sessionId) => {
@@ -402,10 +444,11 @@ window.__ModuleLoader__.load({
         report: (error) => {
           try { console.warn('[approval-reminder]', error); } catch (_error) { /* logging is best-effort */ }
         },
-      });
+      };
+      const notifier = new ApprovalNotifier(deps);
 
       ctx.inject(['uiSession'], (scope) => {
-        const uiSession = ctx.get('uiSession');
+        const uiSession = /** @type {{ sessionStatus?: SessionStatusObservable } | undefined} */ (ctx.get('uiSession'));
         const status = uiSession === undefined ? undefined : uiSession.sessionStatus;
         if (status === undefined || typeof status.subscribe !== 'function') return;
         scope.effect(() => notifier.watch(status), 'approval-reminder: pending approvals');

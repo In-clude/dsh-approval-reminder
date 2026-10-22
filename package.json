@@ -1,6 +1,6 @@
 {
   "name": "dsh-approval-reminder",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "type": "module",
   "description": "在 DeepSeek Harness Web 中，当命令等待审批时通过 Edge/Windows 桌面通知提醒。",
@@ -48,7 +48,12 @@
   ],
   "scripts": {
     "check": "node scripts/check.mjs",
-    "test": "node scripts/check.mjs"
+    "typecheck": "tsc -p jsconfig.json",
+    "test": "npm run typecheck && node scripts/check.mjs"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "typescript": "^5.6.0"
   },
   "dsh": {
     "manifestVersion": 1,

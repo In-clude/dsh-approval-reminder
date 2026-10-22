@@ -88,18 +88,24 @@ cordis.patch.yml       # bundle 的 Loader patch：插入 approval-reminder 条�
 locale/en.json|zh.json # 插件页显示名与描述
 icon.svg               # 插件卡片图标
 scripts/check.mjs      # 无依赖静态检查（npm test）
-.github/workflows/     # CI：push/PR 跑 check
+jsconfig.json          # // @ts-check 的类型检查配置（开发期）
+types/                 # 本地类型声明：模块加载器、require('react')、DSH 客户端契约
+.github/workflows/     # CI：push/PR 跑类型检查 + 静态检查
 ```
 
 ## 开发
 
-无依赖、无构建：`client.js` 就是浏览器加载的 bundle，`index.js` 就是宿主加载的 ES 模块。
+运行时无依赖、无构建：`client.js` 就是浏览器加载的 bundle，`index.js` 就是宿主加载的 ES 模块。开发期只装两个 devDependency（`typescript`、`@types/react`），全部用于类型检查。
 
 ```powershell
-node scripts/check.mjs   # 或 npm test
+npm install              # 只装开发期依赖
+npm run typecheck        # tsc -p jsconfig.json
+node scripts/check.mjs   # 或 npm test（typecheck + 静态检查）
 ```
 
-检查内容：manifest 字段、`exports` 指向的文件、locale 元数据、patch 行、两个 JS 文件的语法（`node:vm` 编译检查，不执行代码）。
+`client.js` 第一行是 `// @ts-check`，配合 `jsconfig.json`（`checkJs`、`strict`）和 `types/*.d.ts`：`window.__ModuleLoader__`、`require('react')` 都有真实类型，DSH 客户端契约（`uiSession.sessionStatus`、pending interaction、locale、slots）用本地最小声明描述。于是 VS Code 这类编辑器打开仓库就有补全与错误提示，不需要引入任何 Harness 客户端包。
+
+检查内容：manifest 字段、`exports` 指向的文件、locale 元数据、patch 行、`// @ts-check` 没有被移除、两个 JS 文件的语法（`node:vm` 编译检查，不执行代码）。
 
 ## 验证状态
 
