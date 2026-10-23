@@ -200,7 +200,7 @@ npm test                 # = typecheck + node scripts/check.mjs（37 项）
 - 「发送测试通知」可独立验证通道；
 - **提醒时机（0.2.0）**：请求挂起时你正看着对话页 → **不弹**；切到别的窗口/最小化后 → **弹出**；回到页面 → 通知自动关闭；
 - **类型与静态检查（0.2.1 起）**：`npm test` 与 GitHub Actions 均通过（干净 runner 上 `npm ci` + typecheck + 37 项检查）。
-- **提醒提示音（0.4.0）**：已在 Windows + Edge 实测：真全屏与 B站「网页全屏」看视频时，任务完成提醒都能听到提示音；「提示音可用时通知设为 `silent`、每次提醒恰好响一次」的配对由 `npm test` / `node --check` 与沙箱行为校验覆盖。
+- **提醒提示音（0.5.0）**：已在 Windows + Edge 实测：真全屏与 B站「网页全屏」看视频时，任务完成提醒都能听到提示音；「提示音可用时通知设为 `silent`、每次提醒恰好响一次」的配对由 `npm test` / `node --check` 与沙箱行为校验覆盖。
 - **提问提醒（0.5.0）**：`ask_user_question` / `plan-review` 的识别、文案、`tag`、去重、“正在看页面时不弹、切走后补发”、回顾卡跳过，均由本地桩环境（假 `uiSession.sessionStatus` + 假 `Notification`）逐条断言通过；**真实提问场景下的系统通知是否弹出仍需实测确认**。
 
 未覆盖：headless / API 会话、页面关闭后的提醒、macOS / Linux 桌面通知、多标签页同时打开时的表现。

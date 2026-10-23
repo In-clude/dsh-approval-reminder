@@ -14,19 +14,6 @@
   `tag = 'dsh-question:<sessionId>'`、有提示音时通知设为 `silent` 且只响一次。
   `plan-review`（计划审阅卡）同属提问，同样提醒。
 - 已答问题的“回顾卡”（`review` 非空，只回放历史、不接受作答）不提醒，翻旧题时不会误弹。
-
-### Changed
-
-- 待处理交互的本地类型由 `ApprovalInteraction` 扩展为 `PendingInteraction`（新增
-  `questions`、`review` 字段）；`ApprovalNotifier` 更名 `ReminderNotifier`，审批与提问
-  共用同一套去重 / 关闭 / 点击逻辑，只有文案与 `tag` 不同。
-- 设置 → 通用「审批桌面通知」行的说明文案同时覆盖提问提醒；插件页描述同步更新。
-- 排查日志新增 `pendingKinds` 字段（本轮快照里等你处理的交互类型）。
-
-## [0.4.0] - 2026-10-23
-
-### Added
-
 - **提醒提示音**：桌面通知可能被静默丢弃——浏览器窗口全屏时 Chromium 会拦掉网页通知弹窗
   （上游 `chrome/browser/notifications/fullscreen_notification_blocker.cc`），Windows 在网页全屏、
   播放视频等场景也可能抑制通知，网页侧没有 API 可以保证弹窗出现。所以开关打开、且提示音可用
@@ -44,6 +31,11 @@
 
 ### Changed
 
+- 待处理交互的本地类型由 `ApprovalInteraction` 扩展为 `PendingInteraction`（新增
+  `questions`、`review` 字段）；`ApprovalNotifier` 更名 `ReminderNotifier`，审批与提问
+  共用同一套去重 / 关闭 / 点击逻辑，只有文案与 `tag` 不同。
+- 设置 → 通用「审批桌面通知」行的说明文案同时覆盖提问提醒；插件页描述同步更新。
+- 排查日志新增 `pendingKinds` 字段（本轮快照里等你处理的交互类型）。
 - 两个 `localStorage` 开关行改由同一个 `createSwitchRow` 工厂生成；`NotifierDeps` 增加
   `alertSoundEnabled` / `chimeReady` / `playAlertSound`；`CompletionReminderRowProps` 合并为 `SwitchRowProps`。
 - 设置 → 通用 现在按顺序是三行：「审批桌面通知」「任务完成通知」「提醒提示音」。
