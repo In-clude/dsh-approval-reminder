@@ -189,6 +189,17 @@ if (hostParsed && !readText('index.js').includes('export function apply')) {
 // ---- project rules ----------------------------------------------------------
 assertFile('AGENTS.md', 'rules');
 
+// ---- documentation ----------------------------------------------------------
+// Chinese is the primary README; the English one is a full translation, so both
+// files must exist and point at each other.
+assertFile('README.md', 'docs');
+assertFile('README.en.md', 'docs');
+for (const [file, needle] of [['README.md', 'README.en.md'], ['README.en.md', 'README.md']]) {
+  if (!existsSync(join(root, file))) continue;
+  if (readText(file).includes(needle)) pass(`docs: ${file} links to ${needle}`);
+  else fail(`docs: ${file} must link to ${needle} so readers can switch language`);
+}
+
 // ---- type checking opt-in ---------------------------------------------------
 if (assertFile('jsconfig.json', 'typecheck')) {
   const config = readJson('jsconfig.json');

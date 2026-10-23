@@ -22,12 +22,13 @@
 - 命名固定：包名 `dsh-approval-reminder`；Loader 行 id `approval-reminder`；slot id `approval-reminder`（`settings.general.item`，`order: 21`）；locale 命名空间 `approvalReminder`；CSS 前缀 `.dsh-approval-reminder-`。
 - 通知使用 `tag = 'dsh-approval:<sessionId>'` 去重、`requireInteraction: true`；点击行为是 `uiWorkspace.openSession(sessionId)` + `window.focus()` + `close()`。
 - 构造通知失败要“记录后不重试”，不要让每个快照变化都重新抛错。
+- 文档：`README.md` 是**中文主版本**，`README.en.md` 是**内容对等的英文版**（不是摘要）；两份顶部互链，新增/修改章节必须同步两份。`scripts/check.mjs` 会校验两个文件存在且互链。
 
 ## 3. 提交前检查（必须全绿）
 
 ```powershell
 npm ci            # 仅 devDependencies：typescript、@types/react
-npm test          # = npm run typecheck + node scripts/check.mjs（32 项）
+npm test          # = npm run typecheck + node scripts/check.mjs（37 项）
 node --check client.js
 ```
 
