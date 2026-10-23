@@ -629,23 +629,27 @@ window.__ModuleLoader__.load({
 
       ctx.effect(() => installPermissionGesture(notifier), 'approval-reminder: permission gesture');
 
-      ctx.slots.inject('settings.general.item', () => ctx.slots.register({
-        name: 'settings.general.item',
-        id: 'approval-reminder',
-        order: 21,
-        locale: NS,
-        inject: () => ({
-          requestPermission: () => notifier.requestPermission(),
-          sendTest: () => notifier.test(),
-        }),
-      }, ApprovalReminderRow));
-
-      ctx.slots.inject('settings.general.item', () => ctx.slots.register({
-        name: 'settings.general.item',
-        id: 'approval-reminder-done',
-        order: 22,
-        locale: NS,
-      }, CompletionReminderRow));
+      // One inject call for both rows: the shipped settings plugins register
+      // several entries into the same slot with one generator, and a second
+      // `inject` on the same key is not guaranteed to coexist with the first.
+      ctx.slots.inject('settings.general.item', function* () {
+        yield ctx.slots.register({
+          name: 'settings.general.item',
+          id: 'approval-reminder',
+          order: 21,
+          locale: NS,
+          inject: () => ({
+            requestPermission: () => notifier.requestPermission(),
+            sendTest: () => notifier.test(),
+          }),
+        }, ApprovalReminderRow);
+        yield ctx.slots.register({
+          name: 'settings.general.item',
+          id: 'approval-reminder-done',
+          order: 22,
+          locale: NS,
+        }, CompletionReminderRow);
+      });
     }
 
     return { inject, apply };
