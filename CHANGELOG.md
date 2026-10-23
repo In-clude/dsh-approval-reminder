@@ -3,6 +3,14 @@
 本项目的显著变更记录在这里，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [0.3.1] - 2026-10-23
+
+### Fixed
+
+- 设置 → 通用 的两行（「审批桌面通知」「任务完成通知」）改由**同一个** `ctx.slots.inject`
+  生成器统一注册：对同一个 `settings.general.item` slot 调两次独立 `inject` 时，后注册的
+  「任务完成通知」行不保证与前一行共存，可能整行不显示。除注册方式外行为不变。
+
 ## [0.3.0] - 2026-10-21
 
 ### Added
