@@ -200,7 +200,7 @@ Verified on Windows + Edge (DSH Web on `127.0.0.1`):
 - **Send a test notification** proves the channel independently;
 - **announcement timing (0.2.0)**: while you look at the conversation page → **no toast**; after switching away or minimizing → **toast**; coming back → the notification closes;
 - **types and static checks (0.2.1)**: `npm test` and GitHub Actions both pass (clean runner: `npm ci` + typecheck + 37 checks);
-- **reminder chime (0.4.0)**: verified on Windows + Edge — the chime is audible for task-finished reminders both in true fullscreen and in Bilibili “web fullscreen”; the “notification `silent` while the chime plays, exactly one sound per reminder” pairing is covered by `npm test` / `node --check` and a sandbox behaviour harness.
+- **reminder chime (0.5.0)**: verified on Windows + Edge — the chime is audible for task-finished reminders both in true fullscreen and in Bilibili “web fullscreen”; the “notification `silent` while the chime plays, exactly one sound per reminder” pairing is covered by `npm test` / `node --check` and a sandbox behaviour harness.
 - **question reminder (0.5.0)**: recognising `ask_user_question` / `plan-review`, the copy, the `tag`, deduplication, “silent while you look, announced once you leave” and skipping review cards are each asserted in a local stub environment (a fake `uiSession.sessionStatus` plus a fake `Notification`); **whether the real system notification appears still needs a real run to confirm**.
 
 Not covered: headless / API Sessions, reminders after the page is closed, macOS / Linux desktop notifications, and multiple tabs open at the same time.
