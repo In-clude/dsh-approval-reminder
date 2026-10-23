@@ -11,6 +11,7 @@
 3. **颜色只用 Theme 公开 token**（`--dsw-alias-*`，见 `cordis_inspect_query` 的 `Theme`）；浅/深色必须自动跟随；字面色只允许出现在 `icon.svg` 这类 artwork 里。
 4. **可见文案一律走 `ctx.locale`**：命名空间固定 `approvalReminder`；`zh` 是键集基准，`en` 用 `@type {typeof zh}` 约束（缺键/错键必须是类型错误）。
 5. **只在用户不看页面时提醒**：`document.visibilityState === 'visible' && document.hasFocus()` 视为正在看页面 → 静默；在 `visibilitychange` / `focus` / `blur` 时重算；同一 `sessionId + request key` 只提醒一次。
+   两种通知都遵守这条：**审批提醒**（`pendingInteraction.kind === 'approval'`，`requireInteraction: true`）与**任务完成提醒**（`running` 的 `true → false` 跳变，不带 `requireInteraction`，子代理会话跳过）。任务完成提醒可开关，默认开启，开关存 `localStorage` 的 `dsh-approval-reminder:task-finished`；审批提醒不开开关（它只在页面外触发，不影响正常操作）。
 6. **不写组件之外的 DOM**：不 portal 到 `document.body`，不读别人的 DOM/样式表，样式随组件卸载或 `ctx.effect` 一起回收。
 7. **运行时零依赖、零构建**：`client.js` 就是浏览器加载的产物，`index.js` 是宿主半侧空壳；宿主侧不注册 Service / Tool / Config / 会话事件。
 
@@ -19,8 +20,8 @@
 - `client.js` 第一行必须是 `// @ts-check`；新增函数/字段要带 JSDoc 类型；`npm run typecheck` 必须零错误。
 - 外部契约类型只写在 `types/dsh-client.d.ts`（只声明本插件用到的字段），环境全局写在 `types/globals.d.ts`。不要引入 DSH 的包类型。
 - 注册、订阅、事件监听、定时器一律放在 `ctx.effect` / `ctx.inject` / `ctx.slots.inject` 里并返回清理函数；插件卸载必须干净（不残留通知、监听、locale 字典、slot 条目）。
-- 命名固定：包名 `dsh-approval-reminder`；Loader 行 id `approval-reminder`；slot id `approval-reminder`（`settings.general.item`，`order: 21`）；locale 命名空间 `approvalReminder`；CSS 前缀 `.dsh-approval-reminder-`。
-- 通知使用 `tag = 'dsh-approval:<sessionId>'` 去重、`requireInteraction: true`；点击行为是 `uiWorkspace.openSession(sessionId)` + `window.focus()` + `close()`。
+- 命名固定：包名 `dsh-approval-reminder`；Loader 行 id `approval-reminder`；slot id `approval-reminder`（`settings.general.item`，`order: 21`）与 `approval-reminder-done`（同 slot，`order: 22`）；locale 命名空间 `approvalReminder`；CSS 前缀 `.dsh-approval-reminder-`。
+- 通知使用 `tag = 'dsh-approval:<sessionId>'` 去重、`requireInteraction: true`；点击行为是 `uiWorkspace.openSession(sessionId)` + `window.focus()` + `close()`。完成通知用 `tag = 'dsh-done:<sessionId>'`。
 - 构造通知失败要“记录后不重试”，不要让每个快照变化都重新抛错。
 - 文档：`README.md` 是**中文主版本**，`README.en.md` 是**内容对等的英文版**（不是摘要）；两份顶部互链，新增/修改章节必须同步两份。`scripts/check.mjs` 会校验两个文件存在且互链。
 

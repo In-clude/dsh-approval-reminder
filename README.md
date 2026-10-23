@@ -6,15 +6,16 @@
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![node](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](package.json)
 
-命令在 DeepSeek Harness 里等待审批时，用 **Edge / Windows 桌面通知**提醒你。
+命令在 DeepSeek Harness 里等待审批、或会话跑完一轮时，用 **Edge / Windows 桌面通知**提醒你。
 
 适用对象：**DeepSeek Harness（DSH）Web 界面 + Windows 上的 Microsoft Edge**。
 插件本体是纯 JavaScript：**运行时零依赖、零构建**，宿主侧只是一个空壳条目。
 
 - 🔔 命令等待审批 → 弹一条 Windows 通知（进通知中心，可点开）
+- ✅ 任务完成（会话转为空闲）→ 弹一条轻量通知，**可在设置里开关**
 - 🙈 **只在你不看页面时提醒**：你正看着对话页就不打扰，切走/最小化才提醒
 - 🖱 点通知 → 切回对应会话并把 Edge 带到前台
-- 🧹 审批一结束（允许/拒绝/取消/撤回）→ 通知自动关闭
+- 🧹 审批一结束（允许/拒绝/取消/撤回）→ 对应通知自动关闭
 - 🔒 只读本地状态，**不参与审批决策**，不发起任何网络请求
 
 ---
@@ -43,9 +44,9 @@ DSH 在命令需要更高权限时会发起一次审批请求（例如沙箱拒�
 
 问题在于时机：你切到别的会话、把 Edge 最小化、或者干脆去做别的事了——面板就在那儿等着，但你看不见。
 
-这个插件补上这一环：**当某个会话出现待审批请求、而你没有看着 DSH 页面时，发一条系统通知。**
+这个插件补上这一环：**当某个会话出现待审批请求、或某个会话跑完一轮转为空闲时，如果你没有看着 DSH 页面，就发一条系统通知。**
 
-一条通知的内容：
+一条审批通知的内容：
 
 | 部分 | 内容 |
 | --- | --- |
@@ -53,6 +54,15 @@ DSH 在命令需要更高权限时会发起一次审批请求（例如沙箱拒�
 | 正文 | 请求方给出的原因（没有原因时是“工具 `pwsh` 请求以更高权限执行”）+ 换行 + 所属会话名 |
 | 点击 | 打开对应会话，并聚焦 Edge 窗口；该通知随后关闭 |
 | 生命周期 | 请求被回答 / 取消 / 撤回后自动关闭；同一会话的新请求会替换旧通知 |
+
+任务完成通知（**默认开启，可在设置里关掉**）：
+
+| 部分 | 内容 |
+| --- | --- |
+| 标题 | `任务完成` |
+| 正文 | 所属会话名 |
+| 触发 | 该会话从“运行中”变为“空闲”（一轮结束）；子代理会话不提醒 |
+| 生命周期 | 普通（非驻留）通知，由系统自动收走；回到页面时也会被关闭 |
 
 它**不做**的事：不改审批结果、不动沙箱策略、不代替你作答、不收集任何数据。
 
@@ -79,7 +89,7 @@ dsh plugin --profile web add "D:\path\to\dsh-approval-reminder"
 3) 也可以在 DSH Web 的 设置 → 插件 页里安装/启用/禁用/卸载。
 ```
 
-安装生效的判断标准：**设置 → 通用** 里出现「审批桌面通知」这一行。bundle 会作为当前 profile 的一个插件条目激活，通常不需要重启 DSH；浏览器端刷新一次页面即可。
+安装生效的判断标准：**设置 → 通用** 里出现「审批桌面通知」与「任务完成通知」两行。bundle 会作为当前 profile 的一个插件条目激活，通常不需要重启 DSH；浏览器端刷新一次页面即可。
 
 ## 首次授权
 
@@ -96,15 +106,17 @@ dsh plugin --profile web add "D:\path\to\dsh-approval-reminder"
 
 - **自测**：设置 → 通用 → 「审批桌面通知」→ 已开启状态下点「发送测试通知」，应当出现一条标题为「审批桌面通知」的系统通知。这条链路不需要真实审批。
 - **真实验证**：任何一次需要审批的工具调用都会触发；如果你正看着页面，它**故意不弹**——把窗口切走，挂起的请求就会补发一条通知。
+- **任务完成通知**：设置 → 通用 → 「任务完成通知」里用开关启用/停用（默认开启，选择存在本机浏览器里）。发一条消息、把窗口切走，等一轮跑完就会收到「任务完成」。
 - **通知太多？** 同一 `sessionId + request key` 永远只提醒一次；回到页面时已弹出的通知会被主动关闭。
 
 ## 工作原理
 
 | 关注点 | 做法 |
 | --- | --- |
-| 待审批状态来源 | 订阅客户端 `uiSession.sessionStatus`（`getSnapshot` / `subscribe` 的纯 observable），筛出 `pendingInteraction.kind === 'approval'` 的会话 |
-| 提醒时机 | `document.visibilityState === 'visible' && document.hasFocus()` 视为“正在看页面”→ 静默；在 `visibilitychange` / `focus` / `blur` 时重新判断，所以**离开页面后才懒提醒**；同一请求只提醒一次 |
-| 通知 | `new Notification(title, { body, tag, requireInteraction: true })`；`tag = 'dsh-approval:<sessionId>'` 让同一会话的通知互相替换 |
+| 状态来源 | 订阅客户端 `uiSession.sessionStatus`（`getSnapshot` / `subscribe` 的纯 observable）：审批看 `pendingInteraction.kind === 'approval'`，完成看 `running` 的 `true → false` 跳变 |
+| 提醒时机 | `document.visibilityState === 'visible' && document.hasFocus()` 视为“正在看页面”→ 静默；在 `visibilitychange` / `focus` / `blur` 时重新判断，所以**离开页面后才懒提醒**；同一审批请求只提醒一次 |
+| 审批通知 | `new Notification(title, { body, tag, requireInteraction: true })`；`tag = 'dsh-approval:<sessionId>'` 让同一会话的通知互相替换 |
+| 完成通知 | `tag = 'dsh-done:<sessionId>'`，不设 `requireInteraction`（由系统自动收走）；子代理会话跳过；开关存在 `localStorage` 的 `dsh-approval-reminder:task-finished` |
 | 点击行为 | `uiWorkspace.openSession(sessionId)` + `window.focus()` + `close()` |
 | 失败处理 | 构造通知抛错时记录到控制台（`[approval-reminder]` 前缀）并标记为已尝试，不会每次状态变化都重试 |
 | 清理 | 订阅、手势监听、可见性监听、设置行、已发通知全部随插件卸载回收 |
@@ -126,7 +138,7 @@ dsh plugin --profile web add "D:\path\to\dsh-approval-reminder"
 
 | 路径 | 作用 |
 | --- | --- |
-| `client.js` | 浏览器 bundle：通知通道 + 设置行（核心逻辑，首行 `// @ts-check`） |
+| `client.js` | 浏览器 bundle：通知通道 + 两个设置行（核心逻辑，首行 `// @ts-check`） |
 | `index.js` | 宿主半侧空壳（让本包成为一个可安装的 Loader 条目） |
 | `cordis.patch.yml` | bundle 的 Loader patch：插入 `approval-reminder` 条目 |
 | `locale/en.json`、`locale/zh.json` | 插件页显示名与描述 |
@@ -173,6 +185,8 @@ npm test                 # = typecheck + node scripts/check.mjs（37 项）
 - 通知能否真的弹出取决于 Windows 通知设置与专注助手，插件无法覆盖。
 - 打开多个标签页时，每个页面各自通知自己收到的请求。
 - 页面关闭后不再提醒（未使用 Service Worker / Push）。
+- 「任务完成通知」只按“运行中 → 空闲”判断，不区分正常完成、被中止或出错；子代理会话的完成不提醒。
+- 「任务完成通知」的开关存在浏览器 `localStorage`（按源隔离）：换端口、换浏览器或清掉站点数据后回到默认（开启）。
 - 样式/文案随 DSH 版本演进；如遇契约变化，`npm run typecheck` 会先报错。
 
 ## 卸载
