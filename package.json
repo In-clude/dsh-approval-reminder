@@ -43,6 +43,7 @@
     "locale/zh.json",
     "scripts/check.mjs",
     "README.md",
+    "README.en.md",
     "LICENSE",
     "CHANGELOG.md"
   ],
