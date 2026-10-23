@@ -186,6 +186,9 @@ if (hostParsed && !readText('index.js').includes('export function apply')) {
   pass('host: exports apply');
 }
 
+// ---- project rules ----------------------------------------------------------
+assertFile('AGENTS.md', 'rules');
+
 // ---- type checking opt-in ---------------------------------------------------
 if (assertFile('jsconfig.json', 'typecheck')) {
   const config = readJson('jsconfig.json');
