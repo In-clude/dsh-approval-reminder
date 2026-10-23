@@ -2,10 +2,11 @@
 /**
  * dsh-approval-reminder — browser half.
  *
- * Raises one Windows/Edge desktop notification per pending approval request.
- * The reminder only observes the Client Session status snapshot published by
- * the `uiSession` service; it never joins the `approval/request` waterfall, so
- * it cannot change an approval outcome.
+ * Raises one Windows/Edge desktop notification per pending approval request or
+ * per pending question the agent waits on the user to answer. The reminder only
+ * observes the Client Session status snapshot published by the `uiSession`
+ * service; it never joins the `approval/request` or `user-questions/request`
+ * waterfall, so it cannot change an outcome.
  *
  * No build step: this file is the bundle served through `dsh.client`
  * (`exports["./client"]`).
@@ -27,8 +28,10 @@ window.__ModuleLoader__.load({
       'notify.untitled': '未命名会话',
       'notify.test.title': '审批桌面通知',
       'notify.test.body': '通知通道可用：命令等待审批时会在这里提醒你。',
+      'question.title': '需要你的选择',
+      'question.body': '智能体在等你从选项里选一个',
       'row.title': '审批桌面通知',
-      'row.description': '只在你没看这个页面时提醒：命令等待审批、而本页面在后台或未聚焦时，用 Edge 桌面通知提醒你。',
+      'row.description': '只在你没看这个页面时提醒：命令等待审批、或智能体提问等你选择，而本页面在后台或未聚焦时，用 Edge 桌面通知提醒你。',
       'row.granted': '已开启',
       'row.default': '未开启',
       'row.denied': '已被浏览器阻止',
@@ -40,6 +43,9 @@ window.__ModuleLoader__.load({
       'done.title': '任务完成',
       'done.row.title': '任务完成通知',
       'done.row.description': '会话运行结束（转为空闲）时提醒你；同样只在你没看这个页面时通知。',
+      'sound.row.title': '提醒提示音',
+      'sound.row.description': '有提醒时播放一声短提示音，并把桌面通知设为静音（避免响两次）；Edge 或 Windows 抑制桌面通知时也能听到。',
+      'sound.row.test': '试听提示音',
     };
 
     /**
@@ -54,8 +60,10 @@ window.__ModuleLoader__.load({
       'notify.untitled': 'Untitled conversation',
       'notify.test.title': 'Approval desktop notifications',
       'notify.test.body': 'The channel works: a command waiting for approval will appear here.',
+      'question.title': 'A choice is needed',
+      'question.body': 'The agent is waiting for you to pick an option',
       'row.title': 'Approval desktop notifications',
-      'row.description': 'Notify me only while I am not looking at this page: an Edge desktop notification appears when a command waits for approval while this page is in the background or unfocused.',
+      'row.description': 'Notify me only while I am not looking at this page: an Edge desktop notification appears when a command waits for approval or the agent asks you to choose, while this page is in the background or unfocused.',
       'row.granted': 'Enabled',
       'row.default': 'Off',
       'row.denied': 'Blocked by the browser',
@@ -67,6 +75,9 @@ window.__ModuleLoader__.load({
       'done.title': 'Task finished',
       'done.row.title': 'Task-finished notifications',
       'done.row.description': 'Notify me when a Session stops running (goes idle); also only while I am not looking at this page.',
+      'sound.row.title': 'Reminder chime',
+      'sound.row.description': 'Plays a short chime whenever a reminder is raised and mutes the desktop notification so it does not sound twice; it is still heard when Edge or Windows suppresses the notification.',
+      'sound.row.test': 'Play the chime',
     };
 
     /**
@@ -115,11 +126,50 @@ window.__ModuleLoader__.load({
     /**
      * Stable identity of one pending request, used for deduplication.
      * @param {string} sessionId
-     * @param {ApprovalInteraction} interaction
+     * @param {PendingInteraction} interaction
      * @returns {string}
      */
     function requestKey(sessionId, interaction) {
       return String(interaction.key === undefined ? sessionId : interaction.key);
+    }
+
+    /**
+     * Whether a pending interaction is an `ask_user_question` request — the
+     * generic option list or its `plan-review` presentation. Either way the
+     * agent is blocked until the user chooses.
+     * @param {PendingInteraction} interaction
+     * @returns {boolean}
+     */
+    function isQuestionInteraction(interaction) {
+      return interaction.kind === 'question' || interaction.kind === 'plan-review';
+    }
+
+    /**
+     * Whether one pending interaction is a live request worth a reminder: an
+     * approval, or a question. A read-only question review card replays an
+     * answered call (`review` set) and every other domain is left alone.
+     * @param {PendingInteraction} interaction
+     * @returns {boolean}
+     */
+    function isAnnounceable(interaction) {
+      if (interaction.review !== undefined) return false;
+      return interaction.kind === 'approval' || isQuestionInteraction(interaction);
+    }
+
+    /**
+     * The copy of a question reminder: the first question of the batch, since
+     * that is what the user is being asked to choose from. A request without
+     * readable question text falls back to a generic line.
+     * @param {PendingInteraction} interaction
+     * @param {Translate} t
+     * @returns {string}
+     */
+    function describeQuestion(interaction, t) {
+      const questions = interaction.questions;
+      const first = questions === undefined || questions.length === 0 ? undefined : questions[0];
+      const text = first === undefined ? undefined : first.question;
+      if (typeof text === 'string' && text !== '') return text;
+      return t('question.body');
     }
 
     /** Where the task-finished switch is remembered (per browser origin). */
@@ -146,12 +196,212 @@ window.__ModuleLoader__.load({
       } catch (_error) { /* private mode: keep the choice for this page only */ }
     }
 
+    /** Where the reminder-chime switch is remembered (per origin). */
+    const SOUND_PREF_KEY = 'dsh-approval-reminder:chime';
+
     /**
-     * One desktop notification per pending approval, keyed by Session identity
-     * and request key. Nothing is raised while the notification permission is
-     * not granted; the next snapshot change after granting flushes the backlog.
+     * Whether the reminder chime is enabled. Off by default: the system
+     * notification keeps its own sound unless the user opts in, in which case
+     * the notification becomes `silent` and the chime is the only sound.
+     * A blocked storage read also falls back to the default (off).
+     * @returns {boolean}
      */
-    class ApprovalNotifier {
+    function readSoundPref() {
+      try {
+        const raw = window.localStorage.getItem(SOUND_PREF_KEY);
+        return raw === '1';
+      } catch (_error) {
+        return false;
+      }
+    }
+
+    /** @param {boolean} enabled */
+    function writeSoundPref(enabled) {
+      try {
+        window.localStorage.setItem(SOUND_PREF_KEY, enabled ? '1' : '0');
+      } catch (_error) { /* private mode: keep the choice for this page only */ }
+    }
+
+    /**
+     * Troubleshooting switch: set `localStorage['dsh-approval-reminder:debug'] = '1'`
+     * in this browser to record why a reminder was or was not announced.
+     */
+    const DEBUG_PREF_KEY = 'dsh-approval-reminder:debug';
+
+    /**
+     * Where the diagnostic entries are kept, so the cause can be read back
+     * after the fact — DevTools only records messages logged while it is open.
+     */
+    const DEBUG_LOG_KEY = 'dsh-approval-reminder:log';
+
+    /** @returns {Array<{ at: string, label: string, details: Record<string, unknown> }>} */
+    function readDebugLog() {
+      try {
+        const raw = window.sessionStorage.getItem(DEBUG_LOG_KEY);
+        if (raw === null) return [];
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (_error) {
+        return [];
+      }
+    }
+
+    /**
+     * Opt-in diagnostics: silent unless the debug flag is set, so the normal
+     * console and storage stay clean. Each entry is appended to this tab's
+     * session log and mirrored to the console.
+     * @param {string} label
+     * @param {Record<string, unknown>} details
+     */
+    function debug(label, details) {
+      try {
+        if (window.localStorage.getItem(DEBUG_PREF_KEY) !== '1') return;
+        const entries = readDebugLog();
+        entries.push({ at: new Date().toISOString(), label, details });
+        if (entries.length > 100) entries.splice(0, entries.length - 100);
+        window.sessionStorage.setItem(DEBUG_LOG_KEY, JSON.stringify(entries));
+        console.debug('[approval-reminder]', label, details);
+      } catch (_error) { /* logging is best-effort */ }
+    }
+
+    /**
+     * The facts that decide whether a reminder may be announced: page
+     * visibility and focus, the window geometry, and the switches.
+     * @returns {Record<string, unknown>}
+     */
+    function reminderState() {
+      const screen = typeof window === 'undefined' ? undefined : window.screen;
+      return {
+        viewing: isViewingPage(),
+        visibility: typeof document === 'undefined' ? undefined : document.visibilityState,
+        focused: typeof document !== 'undefined' && typeof document.hasFocus === 'function' ? document.hasFocus() : undefined,
+        outer: typeof window === 'undefined' ? undefined : [window.outerWidth, window.outerHeight],
+        inner: typeof window === 'undefined' ? undefined : [window.innerWidth, window.innerHeight],
+        screen: screen === undefined ? undefined : [screen.width, screen.height],
+        avail: screen === undefined ? undefined : [screen.availWidth, screen.availHeight],
+        dpr: typeof window === 'undefined' ? undefined : window.devicePixelRatio,
+        permission: readPermission(),
+        soundEnabled: readSoundPref(),
+        doneEnabled: readDonePref(),
+      };
+    }
+
+    /**
+     * Short two-tone chime synthesized with Web Audio. Desktop notifications
+     * can be silently dropped — Chromium suppresses popups while a browser
+     * window is fullscreen, and Windows may suppress them in other states — so
+     * the chime is the alert channel that still reaches the user. When the
+     * chime is available the desktop notification is marked `silent`, so the
+     * reminder sounds exactly once.
+     */
+    class AlertChime {
+      /** @param {{ report: (error: unknown) => void }} deps */
+      constructor(deps) {
+        this.deps = deps;
+        /** @type {AudioContext | null} */
+        this.context = null;
+      }
+
+      /**
+       * Whether the chime can sound right now: the context exists and is
+       * running. When it cannot, callers leave the desktop notification audible
+       * instead of marking it `silent`.
+       * @returns {boolean}
+       */
+      ready() {
+        return this.context !== null && this.context.state === 'running';
+      }
+
+      /**
+       * Create and resume the audio context inside a user gesture — the only
+       * moment Chromium's autoplay policy lets audio start.
+       */
+      unlock() {
+        try {
+          const context = this.ensure();
+          if (context === null) return;
+          if (context.state === 'suspended') {
+            void context.resume().catch(() => { /* autoplay policy refused */ });
+          }
+        } catch (error) {
+          this.deps.report(error);
+        }
+      }
+
+      /** Play the chime; silently does nothing when audio is unavailable. */
+      play() {
+        try {
+          const context = this.ensure();
+          if (context === null) {
+            debug('chime unavailable: no AudioContext', reminderState());
+            return;
+          }
+          if (context.state === 'suspended') {
+            void context.resume().catch(() => { /* autoplay policy refused */ });
+          }
+          debug('chime playing', { state: context.state, ...reminderState() });
+          const start = context.currentTime + 0.02;
+          const tones = [880, 1174.66];
+          for (let index = 0; index < tones.length; index += 1) {
+            const at = start + index * 0.16;
+            const oscillator = context.createOscillator();
+            const gain = context.createGain();
+            oscillator.type = 'sine';
+            oscillator.frequency.value = tones[index];
+            gain.gain.setValueAtTime(0.0001, at);
+            gain.gain.linearRampToValueAtTime(0.1, at + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.15);
+            oscillator.connect(gain);
+            gain.connect(context.destination);
+            oscillator.start(at);
+            oscillator.stop(at + 0.16);
+          }
+        } catch (error) {
+          this.deps.report(error);
+        }
+      }
+
+      /** Release the audio device with the plugin. */
+      dispose() {
+        const context = this.context;
+        this.context = null;
+        if (context === null) return;
+        try {
+          void context.close().catch(() => { /* already closed */ });
+        } catch (_error) { /* already closed */ }
+      }
+
+      /**
+       * Lazily create the audio context.
+       * @returns {AudioContext | null}
+       */
+      ensure() {
+        if (this.context !== null) return this.context;
+        if (typeof window === 'undefined') return null;
+        /** @type {typeof AudioContext | undefined} */
+        const Ctor = window.AudioContext
+          || /** @type {{ webkitAudioContext?: typeof AudioContext }} */ (window).webkitAudioContext;
+        if (typeof Ctor !== 'function') return null;
+        try {
+          const created = new Ctor();
+          this.context = created;
+          debug('audio context created', { state: created.state });
+        } catch (error) {
+          this.deps.report(error);
+          return null;
+        }
+        return this.context;
+      }
+    }
+
+    /**
+     * One desktop notification per pending interaction that needs the user
+     * (approval or question), keyed by Session identity and request key, plus
+     * the completion toasts. Nothing is raised while the notification
+     * permission is not granted; the next snapshot change after granting
+     * flushes the backlog.
+     */
+    class ReminderNotifier {
       /** @param {NotifierDeps} deps */
       constructor(deps) {
         this.deps = deps;
@@ -203,24 +453,52 @@ window.__ModuleLoader__.load({
         const pending = this.collect();
         this.reconcile(pending);
         const finished = this.trackRunning();
-        if (isViewingPage()) {
+        const state = reminderState();
+        const pendingKinds = [...pending.values()].map((interaction) => interaction.kind);
+        if (state.viewing === true) {
           // The Host panel is on screen; a toast would be noise.
           for (const sessionId of [...this.notified.keys()]) this.close(sessionId);
           for (const sessionId of [...this.doneToasts.keys()]) this.closeDone(sessionId);
+          debug('reminder skipped: page is being viewed', { ...state, pendingKinds });
           return;
         }
-        if (readPermission() !== 'granted') return;
+        if (state.permission !== 'granted') {
+          debug('reminder skipped: notification permission is not granted', { ...state, pendingKinds });
+          return;
+        }
+        // A desktop notification can be dropped without notice (browser
+        // fullscreen, Windows suppression), so when the chime is available it
+        // carries the sound and the notification is created `silent`: the
+        // reminder is heard exactly once, whichever channel survives.
+        const soundEnabled = this.deps.alertSoundEnabled();
+        const chimeReady = this.deps.chimeReady();
+        const soundPlayed = soundEnabled && chimeReady;
+        let announced = false;
         for (const [sessionId, interaction] of pending) {
           const key = requestKey(sessionId, interaction);
           if (this.delivered.get(sessionId) === key) continue;
           this.delivered.set(sessionId, key);
-          this.raise(sessionId, interaction);
+          this.raise(sessionId, interaction, soundPlayed);
+          announced = true;
         }
-        if (!readDonePref()) return;
-        for (const sessionId of finished) {
-          if (this.deps.isSubagent(sessionId)) continue;
-          this.raiseDone(sessionId);
+        if (readDonePref()) {
+          for (const sessionId of finished) {
+            if (this.deps.isSubagent(sessionId)) continue;
+            this.raiseDone(sessionId, soundPlayed);
+            announced = true;
+          }
         }
+        if (!announced) return;
+        if (soundPlayed) this.deps.playAlertSound();
+        debug('reminder announced', {
+          ...state,
+          pending: pending.size,
+          pendingKinds,
+          finished: finished.length,
+          soundEnabled,
+          chimeReady,
+          soundPlayed,
+        });
       }
 
       /**
@@ -244,18 +522,20 @@ window.__ModuleLoader__.load({
       }
 
       /**
-       * Pending approval interactions, keyed by Session identity.
-       * @returns {Map<string, ApprovalInteraction>}
+       * Pending interactions that need the user (approvals and questions),
+       * keyed by Session identity. The status snapshot only surfaces the
+       * highest-precedence one per Session.
+       * @returns {Map<string, PendingInteraction>}
        */
       collect() {
-        /** @type {Map<string, ApprovalInteraction>} */
+        /** @type {Map<string, PendingInteraction>} */
         const pending = new Map();
         const observable = this.status;
         if (observable === undefined) return pending;
         for (const [sessionId, status] of observable.getSnapshot()) {
           const interaction = status === undefined ? undefined : status.pendingInteraction;
           if (interaction === undefined || interaction === null) continue;
-          if (interaction.kind !== 'approval') continue;
+          if (!isAnnounceable(interaction)) continue;
           pending.set(sessionId, interaction);
         }
         return pending;
@@ -263,7 +543,7 @@ window.__ModuleLoader__.load({
 
       /**
        * Forget requests that settled or were replaced.
-       * @param {Map<string, ApprovalInteraction>} pending
+       * @param {Map<string, PendingInteraction>} pending
        */
       reconcile(pending) {
         for (const sessionId of [...this.notified.keys()]) {
@@ -341,11 +621,16 @@ window.__ModuleLoader__.load({
       }
 
       /**
+       * Raise the notification of one pending interaction. Approvals and
+       * questions share every rule (only pulled, only once, click to answer,
+       * pinned on screen) and differ only in copy and tag.
        * @param {string} sessionId
-       * @param {ApprovalInteraction} interaction
+       * @param {PendingInteraction} interaction
+       * @param {boolean} silent whether the chime carries the sound
        */
-      raise(sessionId, interaction) {
+      raise(sessionId, interaction, silent) {
         const t = this.deps.translate();
+        const question = isQuestionInteraction(interaction);
         const reason = this.describe(interaction, t);
         const title = this.deps.sessionTitle(sessionId);
         const sessionLine = t('notify.session', {
@@ -361,10 +646,11 @@ window.__ModuleLoader__.load({
         // retried on every later snapshot change.
         this.notified.set(sessionId, entry);
         try {
-          const notification = new Notification(t('notify.title'), {
+          const notification = new Notification(question ? t('question.title') : t('notify.title'), {
             body,
-            tag: 'dsh-approval:' + String(sessionId),
+            tag: (question ? 'dsh-question:' : 'dsh-approval:') + String(sessionId),
             requireInteraction: true,
+            silent,
           });
           entry.notification = notification;
           notification.onclick = () => {
@@ -378,12 +664,15 @@ window.__ModuleLoader__.load({
       }
 
       /**
-       * Human copy for one request: localized reason, raw reason, then tool name.
-       * @param {ApprovalInteraction} interaction
+       * Human copy for one pending interaction: the first question for a
+       * question request, otherwise the localized reason, raw reason, then the
+       * requesting tool's name.
+       * @param {PendingInteraction} interaction
        * @param {Translate} t
        * @returns {string}
        */
       describe(interaction, t) {
+        if (isQuestionInteraction(interaction)) return describeQuestion(interaction, t);
         if (interaction.displayReason !== undefined && interaction.displayReason !== null) {
           const text = this.deps.resolveText(interaction.displayReason);
           if (typeof text === 'string' && text !== '') return text;
@@ -398,8 +687,9 @@ window.__ModuleLoader__.load({
        * transient (they do not demand an answer), so they may expire on their
        * own instead of staying on screen like an approval request.
        * @param {string} sessionId
+       * @param {boolean} silent whether the chime carries the sound
        */
-      raiseDone(sessionId) {
+      raiseDone(sessionId, silent) {
         const t = this.deps.translate();
         const title = this.deps.sessionTitle(sessionId);
         const sessionLine = t('notify.session', {
@@ -410,6 +700,7 @@ window.__ModuleLoader__.load({
           const notification = new Notification(t('done.title'), {
             body: sessionLine,
             tag: 'dsh-done:' + String(sessionId),
+            silent,
           });
           this.doneToasts.set(sessionId, notification);
           notification.onclick = () => {
@@ -432,13 +723,14 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * Ask for the notification permission on the first user gesture of this
-     * page load. Chromium refuses the request without user activation, so this
-     * is the only moment the plugin may prompt without a settings visit.
-     * @param {ApprovalNotifier} notifier
+     * Ask for the notification permission and unlock audio on the first user
+     * gesture of this page load. Chromium requires user activation for both the
+     * permission prompt and starting Web Audio, so one listener covers both.
+     * @param {ReminderNotifier} notifier
+     * @param {AlertChime} chime
      * @returns {() => void} disposer removing the listeners
      */
-    function installPermissionGesture(notifier) {
+    function installGestureHooks(notifier, chime) {
       const options = { capture: true, passive: true };
       function remove() {
         document.removeEventListener('pointerdown', onGesture, options);
@@ -447,6 +739,7 @@ window.__ModuleLoader__.load({
       function onGesture() {
         remove();
         if (readPermission() === 'default') void notifier.requestPermission();
+        chime.unlock();
       }
       document.addEventListener('pointerdown', onGesture, options);
       document.addEventListener('keydown', onGesture, options);
@@ -524,52 +817,91 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * General-settings row: the task-finished notification switch. The choice
-     * lives in this browser's `localStorage`, so it applies immediately and
+     * General-settings row: one switch bound to a `localStorage` preference,
+     * plus an optional button that exercises an injected action (the chime
+     * preview). The choice lives in this browser, so it applies immediately and
      * survives reloads without a Host round-trip.
-     * @param {CompletionReminderRowProps} props slot props: only the localized `t`.
-     * @returns {import('react').ReactElement} the preference row.
+     * @param {{ titleKey: string, descriptionKey: string, testLabelKey?: string, read: () => boolean, write: (enabled: boolean) => void }} spec
+     * @returns {(props: SwitchRowProps) => import('react').ReactElement}
      */
-    function CompletionReminderRow(props) {
-      const t = props.t;
-      const [enabled, setEnabled] = React.useState(readDonePref);
-      const toggle = () => {
-        const next = !enabled;
-        setEnabled(next);
-        writeDonePref(next);
-      };
-      return h('div', { className: 'dsh-approval-reminder-row' }, [
-        h('style', { key: 'style' }, CSS),
-        h('div', { key: 'text', className: 'dsh-approval-reminder-text' }, [
-          h('div', { key: 'title', className: 'dsh-approval-reminder-title' }, t('done.row.title')),
-          h('div', { key: 'description', className: 'dsh-approval-reminder-description' }, t('done.row.description')),
-        ]),
-        h('div', { key: 'actions', className: 'dsh-approval-reminder-actions' }, [
-          h('button', {
-            key: 'switch',
+    function createSwitchRow(spec) {
+      return function SwitchRow(props) {
+        const t = props.t;
+        const [enabled, setEnabled] = React.useState(spec.read);
+        const toggle = () => {
+          const next = !enabled;
+          setEnabled(next);
+          spec.write(next);
+        };
+        /** @type {import('react').ReactElement[]} */
+        const actions = [];
+        if (spec.testLabelKey !== undefined && typeof props.playSound === 'function') {
+          actions.push(h('button', {
+            key: 'test',
             type: 'button',
-            role: 'switch',
-            'aria-checked': enabled,
-            'aria-label': t('done.row.title'),
-            className: 'dsh-approval-reminder-switch',
-            onClick: toggle,
-          }, h('span', { className: 'dsh-approval-reminder-switch-thumb' })),
-        ]),
-      ]);
+            className: 'dsh-approval-reminder-button',
+            onClick: () => { props.playSound?.(); },
+          }, t(spec.testLabelKey)));
+        }
+        actions.push(h('button', {
+          key: 'switch',
+          type: 'button',
+          role: 'switch',
+          'aria-checked': enabled,
+          'aria-label': t(spec.titleKey),
+          className: 'dsh-approval-reminder-switch',
+          onClick: toggle,
+        }, h('span', { className: 'dsh-approval-reminder-switch-thumb' })));
+        return h('div', { className: 'dsh-approval-reminder-row' }, [
+          h('style', { key: 'style' }, CSS),
+          h('div', { key: 'text', className: 'dsh-approval-reminder-text' }, [
+            h('div', { key: 'title', className: 'dsh-approval-reminder-title' }, t(spec.titleKey)),
+            h('div', { key: 'description', className: 'dsh-approval-reminder-description' }, t(spec.descriptionKey)),
+          ]),
+          h('div', { key: 'actions', className: 'dsh-approval-reminder-actions' }, actions),
+        ]);
+      };
     }
+
+    /** Task-finished notification switch. */
+    const CompletionReminderRow = createSwitchRow({
+      titleKey: 'done.row.title',
+      descriptionKey: 'done.row.description',
+      read: readDonePref,
+      write: writeDonePref,
+    });
+
+    /** Reminder chime switch (the audio alert that survives dropped toasts). */
+    const SoundReminderRow = createSwitchRow({
+      titleKey: 'sound.row.title',
+      descriptionKey: 'sound.row.description',
+      testLabelKey: 'sound.row.test',
+      read: readSoundPref,
+      write: writeSoundPref,
+    });
 
     /** Services this Client half cannot activate without. */
     const inject = ['slots', 'locale'];
 
     /**
      * Install the notification channel (silent while the page is being viewed),
-     * the permission gesture, and the General-settings row.
+     * the gesture hooks (notification permission + audio unlock), the reminder
+     * chime, and the General-settings rows.
      * @param {ClientPluginContext} ctx Client root context.
      */
     function apply(ctx) {
       ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'approval-reminder: dictionaries');
 
       const t = ctx.locale.bind(NS);
+      /**
+       * Console logging is best-effort: a blocked console must not break the
+       * reminder channel.
+       * @param {unknown} error
+       */
+      const report = (error) => {
+        try { console.warn('[approval-reminder]', error); } catch (_error) { /* logging is best-effort */ }
+      };
+      const chime = new AlertChime({ report });
       /** @type {NotifierDeps} */
       const deps = {
         translate: () => t,
@@ -598,17 +930,18 @@ window.__ModuleLoader__.load({
           const row = rows === undefined ? undefined : rows[sessionId];
           return row !== undefined && row.origin === 'subagent';
         },
-        report: (error) => {
-          try { console.warn('[approval-reminder]', error); } catch (_error) { /* logging is best-effort */ }
-        },
+        report,
+        alertSoundEnabled: () => readSoundPref(),
+        chimeReady: () => chime.ready(),
+        playAlertSound: () => { chime.play(); },
       };
-      const notifier = new ApprovalNotifier(deps);
+      const notifier = new ReminderNotifier(deps);
 
       ctx.inject(['uiSession'], (scope) => {
         const uiSession = /** @type {{ sessionStatus?: SessionStatusObservable } | undefined} */ (ctx.get('uiSession'));
         const status = uiSession === undefined ? undefined : uiSession.sessionStatus;
         if (status === undefined || typeof status.subscribe !== 'function') return;
-        scope.effect(() => notifier.watch(status), 'approval-reminder: pending approvals');
+        scope.effect(() => notifier.watch(status), 'approval-reminder: pending interactions');
         scope.effect(() => () => notifier.dispose(), 'approval-reminder: notifications');
       });
 
@@ -627,9 +960,10 @@ window.__ModuleLoader__.load({
         };
       }, 'approval-reminder: page visibility');
 
-      ctx.effect(() => installPermissionGesture(notifier), 'approval-reminder: permission gesture');
+      ctx.effect(() => installGestureHooks(notifier, chime), 'approval-reminder: gesture hooks');
+      ctx.effect(() => () => { chime.dispose(); }, 'approval-reminder: alert sound');
 
-      // One inject call for both rows: the shipped settings plugins register
+      // One inject call for all rows: the shipped settings plugins register
       // several entries into the same slot with one generator, and a second
       // `inject` on the same key is not guaranteed to coexist with the first.
       ctx.slots.inject('settings.general.item', function* () {
@@ -649,6 +983,13 @@ window.__ModuleLoader__.load({
           order: 22,
           locale: NS,
         }, CompletionReminderRow);
+        yield ctx.slots.register({
+          name: 'settings.general.item',
+          id: 'approval-reminder-sound',
+          order: 23,
+          locale: NS,
+          inject: () => ({ playSound: () => { chime.play(); } }),
+        }, SoundReminderRow);
       });
     }
 
