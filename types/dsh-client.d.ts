@@ -13,9 +13,15 @@ interface ApprovalDisplayReason {
   readonly [locale: string]: string;
 }
 
+/** One question of a pending question request (only the fields this plugin reads). */
+interface PendingQuestionItem {
+  /** The question to display; the first one becomes the notification body. */
+  readonly question?: string;
+}
+
 /** Fields this plugin reads from a pending interaction. */
-interface ApprovalInteraction {
-  /** Domain discriminator; only `approval` is honored. */
+interface PendingInteraction {
+  /** Domain discriminator: `approval`, `question` and `plan-review` are honored. */
   readonly kind?: string;
   /** Opaque request identity; a replacement request uses a new key. */
   readonly key?: string;
@@ -25,12 +31,19 @@ interface ApprovalInteraction {
   readonly reason?: string;
   /** Localized presentation copy. */
   readonly displayReason?: ApprovalDisplayReason;
+  /** Question requests: the questions to answer. */
+  readonly questions?: readonly PendingQuestionItem[];
+  /**
+   * Recorded answers of an already settled question. Present only on the
+   * read-only review card that replays history, which is never a live request.
+   */
+  readonly review?: readonly unknown[];
 }
 
 /** One Session's entry in the status snapshot published by `uiSession`. */
 interface SessionStatusEntry {
   /** Highest-precedence pending interaction of one Session. */
-  readonly pendingInteraction?: ApprovalInteraction | undefined;
+  readonly pendingInteraction?: PendingInteraction | undefined;
   /** Latest known running state; absent until a baseline or event establishes it. */
   readonly running?: boolean | undefined;
 }
@@ -80,6 +93,12 @@ interface NotifierDeps {
   sessionTitle(sessionId: string): string | undefined;
   /** Subagent Sessions run on the user's behalf; their completions stay silent. */
   isSubagent(sessionId: string): boolean;
+  /** Whether the reminder chime is enabled. */
+  alertSoundEnabled(): boolean;
+  /** Whether the chime can sound right now (audio context running). */
+  chimeReady(): boolean;
+  /** Play the reminder chime; no-op when audio is unavailable. */
+  playAlertSound(): void;
   report(error: unknown): void;
 }
 
@@ -90,7 +109,9 @@ interface ApprovalReminderRowProps {
   sendTest(): boolean;
 }
 
-/** Props the task-finished switch row receives. */
-interface CompletionReminderRowProps {
+/** Props a General-settings switch row receives. */
+interface SwitchRowProps {
   t: Translate;
+  /** Injected by the sound row only: preview the reminder chime. */
+  playSound?(): void;
 }
