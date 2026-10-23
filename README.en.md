@@ -6,15 +6,16 @@
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![node](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](package.json)
 
-Raise an **Edge / Windows desktop notification** while a command waits for approval in DeepSeek Harness.
+Raise an **Edge / Windows desktop notification** while a command waits for approval or a Session finishes a turn in DeepSeek Harness.
 
 Target: **the DeepSeek Harness (DSH) Web UI with Microsoft Edge on Windows.**
 The plugin is plain JavaScript — **no runtime dependencies, no build step** — and the Host half is an empty shell entry.
 
 - 🔔 A command waits for approval → one Windows notification (it lands in the Action Center)
+- ✅ A task finishes (the Session goes idle) → a light notification, **toggleable in Settings**
 - 🙈 **Only while you are not looking at the page**: silent while you are on the conversation, announced once you switch away or minimize
 - 🖱 Click the notification → opens that conversation and brings Edge to the front
-- 🧹 Once the approval is answered, cancelled or withdrawn → the notification closes
+- 🧹 Once the approval is answered, cancelled or withdrawn → that notification closes
 - 🔒 Reads local state only, **never takes part in the approval decision**, makes no network request
 
 ---
@@ -43,9 +44,9 @@ When a command needs higher privileges, DSH raises an approval request (for exam
 
 The problem is timing: you switched to another conversation, minimized Edge, or walked away — the panel is waiting, but you cannot see it.
 
-This plugin closes that gap: **when a Session has a pending approval request and you are not looking at the DSH page, it raises a system notification.**
+This plugin closes that gap: **when a Session has a pending approval request, or finishes a turn and goes idle, and you are not looking at the DSH page, it raises a system notification.**
 
-One notification carries:
+One approval notification carries:
 
 | Part | Content |
 | --- | --- |
@@ -53,6 +54,15 @@ One notification carries:
 | Body | The reason supplied by the requester (or “Tool `pwsh` requests privileged execution”) + a newline + the Session name |
 | Click | Opens that conversation and focuses the Edge window, then closes the notification |
 | Lifetime | Closed as soon as the request is answered, cancelled or withdrawn; a newer request in the same Session replaces the older notification |
+
+The task-finished notification (**on by default, can be switched off in Settings**):
+
+| Part | Content |
+| --- | --- |
+| Title | `Task finished` |
+| Body | The Session name |
+| Trigger | That Session goes from running to idle (a turn ended); subagent Sessions are skipped |
+| Lifetime | Transient (not pinned), so the system may collect it; returning to the page also closes it |
 
 What it does **not** do: it does not change approval outcomes, does not touch sandbox policy, does not answer for you, and does not collect anything.
 
@@ -79,7 +89,7 @@ dsh plugin --profile web add "D:\path\to\dsh-approval-reminder"
 3) Or use Settings → Plugins in the DSH Web UI to install / enable / disable / remove it.
 ```
 
-How to tell it is live: a row named **Approval desktop notifications** appears under **Settings → General**. The bundle activates as one plugin entry of the current profile; usually no DSH restart is needed, and a browser reload is enough.
+How to tell it is live: two rows named **Approval desktop notifications** and **Task-finished notifications** appear under **Settings → General**. The bundle activates as one plugin entry of the current profile; usually no DSH restart is needed, and a browser reload is enough.
 
 ## First-time permission
 
@@ -96,18 +106,20 @@ If you accidentally pressed “Block”: click the site icon at the left of Edge
 
 - **Self-test**: Settings → General → **Approval desktop notifications** → with the state at **Enabled**, press **Send a test notification**; a system notification titled “Approval desktop notifications” should appear. This needs no real approval.
 - **Real check**: any tool call that needs approval triggers it. If you are looking at the page it deliberately stays silent — switch the window away and the pending request is announced.
+- **Task-finished notifications**: use the switch in Settings → General → **Task-finished notifications** to enable or disable them (on by default; the choice is stored in this browser). Send a message, switch the window away, and the end of the turn raises a “Task finished” notification.
 - **Too noisy?** One `sessionId + request key` is announced exactly once, and a notification that is already on screen is closed when you come back to the page.
 
 ## How it works
 
 | Concern | Approach |
 | --- | --- |
-| Where pending approvals come from | Subscribe to the client's `uiSession.sessionStatus` (a plain `getSnapshot` / `subscribe` observable) and keep Sessions whose `pendingInteraction.kind === 'approval'` |
+| Where the state comes from | Subscribe to the client's `uiSession.sessionStatus` (a plain `getSnapshot` / `subscribe` observable): approvals are Sessions whose `pendingInteraction.kind === 'approval'`, completions are the `running` `true → false` transition |
 | When to announce | `document.visibilityState === 'visible' && document.hasFocus()` means “the user is looking” → stay silent; the check runs again on `visibilitychange` / `focus` / `blur`, so a request that arrived while reading is announced once you leave; one request is announced at most once |
-| Notification | `new Notification(title, { body, tag, requireInteraction: true })` with `tag = 'dsh-approval:<sessionId>'` so notifications of one Session replace each other |
+| Approval notification | `new Notification(title, { body, tag, requireInteraction: true })` with `tag = 'dsh-approval:<sessionId>'` so notifications of one Session replace each other |
+| Completion notification | `tag = 'dsh-done:<sessionId>'` without `requireInteraction` (the system may collect it); subagent Sessions are skipped; the switch lives in `localStorage` under `dsh-approval-reminder:task-finished` |
 | Click | `uiWorkspace.openSession(sessionId)` + `window.focus()` + `close()` |
 | Failure handling | A refused construction is logged under the `[approval-reminder]` console prefix and marked as attempted, so later snapshot changes do not retry it |
-| Cleanup | Subscriptions, gesture and visibility listeners, the settings row, and open notifications are all released with the plugin |
+| Cleanup | Subscriptions, gesture and visibility listeners, the settings rows, and open notifications are all released with the plugin |
 | Host half | An empty shell (`index.js` is just `apply() {}`): no Service, no Tool, no Config, no session events |
 
 **Why not listen to `approval/request`?** On the client that waterfall is forwarded to every listener; any listener that returns a result (or wraps `next()`) can claim or block the Host approval panel, and registration order is not under our control. Reading the pending-interaction snapshot is read-only and cannot change an outcome.
@@ -126,7 +138,7 @@ If you accidentally pressed “Block”: click the site icon at the left of Edge
 
 | Path | Purpose |
 | --- | --- |
-| `client.js` | The browser bundle: notification channel + settings row (first line `// @ts-check`) |
+| `client.js` | The browser bundle: notification channel + both settings rows (first line `// @ts-check`) |
 | `index.js` | Host-half shell (makes the package an installable Loader entry) |
 | `cordis.patch.yml` | The bundle's Loader patch: inserts the `approval-reminder` row |
 | `locale/en.json`, `locale/zh.json` | Plugin card title and description |
@@ -173,6 +185,8 @@ Not covered: headless / API Sessions, reminders after the page is closed, macOS 
 - Whether a notification is actually displayed depends on Windows notification settings and Focus assist; the plugin cannot override that.
 - With several tabs open, each page notifies about the requests it received.
 - After the tab is closed there are no reminders (no Service Worker / Push).
+- Task-finished notifications key off the running → idle transition only; they do not distinguish a completed turn from an aborted or failed one, and subagent Sessions are skipped.
+- The task-finished switch lives in browser `localStorage` (per origin): another port, another browser, or cleared site data falls back to the default (on).
 - Styling and copy follow the DSH version; if a contract changes, `npm run typecheck` reports it first.
 
 ## Uninstall
@@ -181,7 +195,7 @@ Not covered: headless / API Sessions, reminders after the page is closed, macOS 
 dsh plugin --profile web remove dsh-approval-reminder
 ```
 
-Or disable / remove it from **Settings → Plugins**. Uninstalling removes the notifications and the settings row and leaves no Session data behind.
+Or disable / remove it from **Settings → Plugins**. Uninstalling removes the notifications and both settings rows and leaves no Session data behind.
 
 ## Market listing
 

@@ -31,6 +31,8 @@ interface ApprovalInteraction {
 interface SessionStatusEntry {
   /** Highest-precedence pending interaction of one Session. */
   readonly pendingInteraction?: ApprovalInteraction | undefined;
+  /** Latest known running state; absent until a baseline or event establishes it. */
+  readonly running?: boolean | undefined;
 }
 
 /** The observable pair exposed as `uiSession.sessionStatus`. */
@@ -76,6 +78,8 @@ interface NotifierDeps {
   resolveText(text: string | ApprovalDisplayReason): string;
   openSession(sessionId: string): void;
   sessionTitle(sessionId: string): string | undefined;
+  /** Subagent Sessions run on the user's behalf; their completions stay silent. */
+  isSubagent(sessionId: string): boolean;
   report(error: unknown): void;
 }
 
@@ -84,4 +88,9 @@ interface ApprovalReminderRowProps {
   t: Translate;
   requestPermission(): Promise<ApprovalPermission>;
   sendTest(): boolean;
+}
+
+/** Props the task-finished switch row receives. */
+interface CompletionReminderRowProps {
+  t: Translate;
 }

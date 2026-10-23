@@ -3,6 +3,20 @@
 本项目的显著变更记录在这里，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [0.3.0] - 2026-10-21
+
+### Added
+
+- **任务完成通知**：会话从“运行中”转为“空闲”时，发一条轻量桌面通知（标题「任务完成」，
+  正文为会话名）；点击同样回到对应会话。子代理会话跳过，避免工作流里刷屏。
+- **开关**：设置 → 通用新增「任务完成通知」行（`role="switch"`、`aria-checked`），
+  默认开启，开关值存在本机浏览器 `localStorage` 的 `dsh-approval-reminder:task-finished`。
+- 完成通知沿用同一套“只在你不看页面时提醒”的判定；回到页面时会被主动关闭。
+
+### Changed
+
+- 状态快照的本地类型补充 `running` 字段；`NotifierDeps` 增加 `isSubagent`。
+
 ## [0.2.1] - 2026-10-21
 
 ### Added

@@ -37,6 +37,9 @@ window.__ModuleLoader__.load({
       'row.test': '发送测试通知',
       'hint.denied': '请在 Edge 中允许本站点显示通知（地址栏左侧图标 → 权限）后刷新页面。',
       'hint.unsupported': '桌面通知需要 https 或 localhost 的安全上下文，并使用支持通知的浏览器。',
+      'done.title': '任务完成',
+      'done.row.title': '任务完成通知',
+      'done.row.description': '会话运行结束（转为空闲）时提醒你；同样只在你没看这个页面时通知。',
     };
 
     /**
@@ -61,6 +64,9 @@ window.__ModuleLoader__.load({
       'row.test': 'Send a test notification',
       'hint.denied': 'Allow notifications for this site in Edge (site icon → Permissions), then reload the page.',
       'hint.unsupported': 'Desktop notifications need a secure context (https or localhost) and a browser that supports them.',
+      'done.title': 'Task finished',
+      'done.row.title': 'Task-finished notifications',
+      'done.row.description': 'Notify me when a Session stops running (goes idle); also only while I am not looking at this page.',
     };
 
     /**
@@ -81,6 +87,11 @@ window.__ModuleLoader__.load({
       '.dsh-approval-reminder-button{height:28px;padding:0 12px;border:.5px solid var(--dsw-alias-border-l2);border-radius:8px;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:18px;cursor:pointer}',
       '.dsh-approval-reminder-button:hover:not(:disabled){background:var(--dsw-alias-bg-layer-1)}',
       '.dsh-approval-reminder-button:disabled{cursor:not-allowed;opacity:.4}',
+      '.dsh-approval-reminder-switch{box-sizing:border-box;position:relative;flex:0 0 auto;width:36px;height:20px;padding:2px;border:0;border-radius:999px;background:var(--dsw-alias-border-l2);cursor:pointer}',
+      '.dsh-approval-reminder-switch[aria-checked="true"]{background:var(--dsw-alias-brand-primary)}',
+      '.dsh-approval-reminder-switch:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}',
+      '.dsh-approval-reminder-switch-thumb{display:block;width:16px;height:16px;border-radius:50%;background:var(--dsw-alias-bg-base);transition:transform 120ms ease}',
+      '.dsh-approval-reminder-switch[aria-checked="true"] .dsh-approval-reminder-switch-thumb{transform:translateX(16px)}',
     ].join('');
 
     /** @returns {ApprovalPermission} */
@@ -111,6 +122,30 @@ window.__ModuleLoader__.load({
       return String(interaction.key === undefined ? sessionId : interaction.key);
     }
 
+    /** Where the task-finished switch is remembered (per browser origin). */
+    const DONE_PREF_KEY = 'dsh-approval-reminder:task-finished';
+
+    /**
+     * Whether task-finished notifications are enabled. A blocked storage read
+     * falls back to the default (on) instead of breaking the channel.
+     * @returns {boolean}
+     */
+    function readDonePref() {
+      try {
+        const raw = window.localStorage.getItem(DONE_PREF_KEY);
+        return raw === null ? true : raw === '1';
+      } catch (_error) {
+        return true;
+      }
+    }
+
+    /** @param {boolean} enabled */
+    function writeDonePref(enabled) {
+      try {
+        window.localStorage.setItem(DONE_PREF_KEY, enabled ? '1' : '0');
+      } catch (_error) { /* private mode: keep the choice for this page only */ }
+    }
+
     /**
      * One desktop notification per pending approval, keyed by Session identity
      * and request key. Nothing is raised while the notification permission is
@@ -132,6 +167,17 @@ window.__ModuleLoader__.load({
          * @type {Map<string, string>}
          */
         this.delivered = new Map();
+        /**
+         * Last observed running state per Session: a completion is a true→false
+         * transition, never a first reading, so an already idle page is silent.
+         * @type {Map<string, boolean>}
+         */
+        this.running = new Map();
+        /**
+         * Task-finished notifications currently on screen, keyed by Session.
+         * @type {Map<string, Notification>}
+         */
+        this.doneToasts = new Map();
       }
 
       /**
@@ -147,17 +193,20 @@ window.__ModuleLoader__.load({
       }
 
       /**
-       * Recompute from the snapshot: close what settled or was seen, and raise
-       * a notification for each request the user has not been told about while
-       * the page is not being viewed.
+       * Recompute from the snapshot: close what settled or was seen, raise a
+       * notification for each request the user has not been told about while
+       * the page is not being viewed, and announce Sessions that just stopped
+       * running when that reminder is enabled.
        */
       sync() {
         if (this.status === undefined) return;
         const pending = this.collect();
         this.reconcile(pending);
+        const finished = this.trackRunning();
         if (isViewingPage()) {
-          // The Host approval panel is on screen; a toast would be noise.
+          // The Host panel is on screen; a toast would be noise.
           for (const sessionId of [...this.notified.keys()]) this.close(sessionId);
+          for (const sessionId of [...this.doneToasts.keys()]) this.closeDone(sessionId);
           return;
         }
         if (readPermission() !== 'granted') return;
@@ -167,6 +216,31 @@ window.__ModuleLoader__.load({
           this.delivered.set(sessionId, key);
           this.raise(sessionId, interaction);
         }
+        if (!readDonePref()) return;
+        for (const sessionId of finished) {
+          if (this.deps.isSubagent(sessionId)) continue;
+          this.raiseDone(sessionId);
+        }
+      }
+
+      /**
+       * Sessions that stopped running since the previous snapshot.
+       * @returns {string[]}
+       */
+      trackRunning() {
+        const observable = this.status;
+        if (observable === undefined) return [];
+        /** @type {Map<string, boolean>} */
+        const next = new Map();
+        /** @type {string[]} */
+        const finished = [];
+        for (const [sessionId, status] of observable.getSnapshot()) {
+          const running = status !== undefined && status.running === true;
+          next.set(sessionId, running);
+          if (this.running.get(sessionId) === true && !running) finished.push(sessionId);
+        }
+        this.running = next;
+        return finished;
       }
 
       /**
@@ -250,7 +324,9 @@ window.__ModuleLoader__.load({
       /** Close every notification this plugin raised. */
       dispose() {
         for (const sessionId of [...this.notified.keys()]) this.close(sessionId);
+        for (const sessionId of [...this.doneToasts.keys()]) this.closeDone(sessionId);
         this.delivered.clear();
+        this.running.clear();
       }
 
       /**
@@ -315,6 +391,43 @@ window.__ModuleLoader__.load({
         if (typeof interaction.reason === 'string' && interaction.reason !== '') return interaction.reason;
         const toolName = interaction.toolName === undefined ? '?' : String(interaction.toolName);
         return t('notify.body', { toolName });
+      }
+
+      /**
+       * Announce one Session that just stopped running. Completion toasts are
+       * transient (they do not demand an answer), so they may expire on their
+       * own instead of staying on screen like an approval request.
+       * @param {string} sessionId
+       */
+      raiseDone(sessionId) {
+        const t = this.deps.translate();
+        const title = this.deps.sessionTitle(sessionId);
+        const sessionLine = t('notify.session', {
+          title: typeof title === 'string' && title !== '' ? title : t('notify.untitled'),
+        });
+        this.closeDone(sessionId);
+        try {
+          const notification = new Notification(t('done.title'), {
+            body: sessionLine,
+            tag: 'dsh-done:' + String(sessionId),
+          });
+          this.doneToasts.set(sessionId, notification);
+          notification.onclick = () => {
+            this.deps.openSession(sessionId);
+            try { window.focus(); } catch (_error) { /* focus is best-effort */ }
+            try { notification.close(); } catch (_error) { /* already closed */ }
+          };
+        } catch (error) {
+          this.deps.report(error);
+        }
+      }
+
+      /** @param {string} sessionId */
+      closeDone(sessionId) {
+        const notification = this.doneToasts.get(sessionId);
+        if (notification === undefined) return;
+        this.doneToasts.delete(sessionId);
+        try { notification.close(); } catch (_error) { /* already closed */ }
       }
     }
 
@@ -410,6 +523,41 @@ window.__ModuleLoader__.load({
       ]);
     }
 
+    /**
+     * General-settings row: the task-finished notification switch. The choice
+     * lives in this browser's `localStorage`, so it applies immediately and
+     * survives reloads without a Host round-trip.
+     * @param {CompletionReminderRowProps} props slot props: only the localized `t`.
+     * @returns {import('react').ReactElement} the preference row.
+     */
+    function CompletionReminderRow(props) {
+      const t = props.t;
+      const [enabled, setEnabled] = React.useState(readDonePref);
+      const toggle = () => {
+        const next = !enabled;
+        setEnabled(next);
+        writeDonePref(next);
+      };
+      return h('div', { className: 'dsh-approval-reminder-row' }, [
+        h('style', { key: 'style' }, CSS),
+        h('div', { key: 'text', className: 'dsh-approval-reminder-text' }, [
+          h('div', { key: 'title', className: 'dsh-approval-reminder-title' }, t('done.row.title')),
+          h('div', { key: 'description', className: 'dsh-approval-reminder-description' }, t('done.row.description')),
+        ]),
+        h('div', { key: 'actions', className: 'dsh-approval-reminder-actions' }, [
+          h('button', {
+            key: 'switch',
+            type: 'button',
+            role: 'switch',
+            'aria-checked': enabled,
+            'aria-label': t('done.row.title'),
+            className: 'dsh-approval-reminder-switch',
+            onClick: toggle,
+          }, h('span', { className: 'dsh-approval-reminder-switch-thumb' })),
+        ]),
+      ]);
+    }
+
     /** Services this Client half cannot activate without. */
     const inject = ['slots', 'locale'];
 
@@ -440,6 +588,15 @@ window.__ModuleLoader__.load({
           const rows = snapshot === undefined ? undefined : snapshot.byId;
           const row = rows === undefined ? undefined : rows[sessionId];
           return row === undefined ? undefined : row.displayTitle;
+        },
+        isSubagent: (sessionId) => {
+          const sessions = ctx.get('sessions');
+          const list = sessions === undefined ? undefined : sessions.list;
+          if (list === undefined || typeof list.getSnapshot !== 'function') return false;
+          const snapshot = list.getSnapshot();
+          const rows = snapshot === undefined ? undefined : snapshot.byId;
+          const row = rows === undefined ? undefined : rows[sessionId];
+          return row !== undefined && row.origin === 'subagent';
         },
         report: (error) => {
           try { console.warn('[approval-reminder]', error); } catch (_error) { /* logging is best-effort */ }
@@ -482,6 +639,13 @@ window.__ModuleLoader__.load({
           sendTest: () => notifier.test(),
         }),
       }, ApprovalReminderRow));
+
+      ctx.slots.inject('settings.general.item', () => ctx.slots.register({
+        name: 'settings.general.item',
+        id: 'approval-reminder-done',
+        order: 22,
+        locale: NS,
+      }, CompletionReminderRow));
     }
 
     return { inject, apply };
