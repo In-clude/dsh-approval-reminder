@@ -107,6 +107,8 @@ node scripts/check.mjs   # 或 npm test（typecheck + 静态检查）
 
 检查内容：manifest 字段、`exports` 指向的文件、locale 元数据、patch 行、`// @ts-check` 没有被移除、两个 JS 文件的语法（`node:vm` 编译检查，不执行代码）。
 
+改动前请先读 [AGENTS.md](AGENTS.md)：那里写着这个项目**不能破坏的约束**（不接 `approval/request` waterfall、只用 `--dsw-alias-*` token、文案走 locale、只在页面不可见时通知）、命名约定、提交前检查、隐私规则与商店收录流程。
+
 ## 验证状态
 
 在 Windows + Edge（DSH Web `127.0.0.1`）上实测通过：
