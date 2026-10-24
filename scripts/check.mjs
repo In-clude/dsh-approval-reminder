@@ -200,6 +200,21 @@ for (const [file, needle] of [['README.md', 'README.en.md'], ['README.en.md', 'R
   else fail(`docs: ${file} must link to ${needle} so readers can switch language`);
 }
 
+// ---- privacy ----------------------------------------------------------------
+// Absolute Windows paths leak the developer's account name, so tracked docs may
+// only use the documented placeholders. This scan is what catches an accidental
+// real path before it is pushed; the manual grep in AGENTS.md missed one once.
+const privacyDocs = ['AGENTS.md', 'README.md', 'README.en.md', 'CHANGELOG.md'];
+for (const relative of privacyDocs) {
+  if (!existsSync(join(root, relative))) continue;
+  const candidates = readText(relative).match(/[A-Za-z]:\\[^\s`'"|)]+/g) ?? [];
+  const leaks = candidates.filter(
+    (value) => !/^[A-Za-z]:\\path\\to\\/.test(value) && !/^C:\\Users\\(<用户名>|<username>)/.test(value),
+  );
+  if (leaks.length === 0) pass(`privacy: ${relative} only uses placeholder paths`);
+  else fail(`privacy: ${relative} leaks local path(s): ${[...new Set(leaks)].join(', ')}`);
+}
+
 // ---- type checking opt-in ---------------------------------------------------
 if (assertFile('jsconfig.json', 'typecheck')) {
   const config = readJson('jsconfig.json');

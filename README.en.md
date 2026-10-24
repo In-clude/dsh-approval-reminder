@@ -182,12 +182,12 @@ No runtime dependencies and no build: `client.js` is the artifact the browser lo
 ```powershell
 npm install              # dev dependencies only
 npm run typecheck        # tsc -p jsconfig.json
-npm test                 # = typecheck + node scripts/check.mjs (37 checks)
+npm test                 # = typecheck + node scripts/check.mjs (41 checks)
 ```
 
 `client.js` starts with `// @ts-check`; together with `jsconfig.json` (`checkJs`, `strict`) and `types/*.d.ts`, both `window.__ModuleLoader__` and `require('react')` are genuinely typed, and the DSH client contract is described by minimal local declarations. Editors such as VS Code therefore give completions and errors out of the box — **without importing any Harness client package**.
 
-The static checks cover: manifest fields and `exports` targets, locale metadata, the patch row, the presence of `AGENTS.md`, the `// @ts-check` opt-in, and the syntax of both JS files (compiled through `node:vm`, never executed).
+The static checks cover: manifest fields and `exports` targets, locale metadata, the patch row, the presence of `AGENTS.md`, the `// @ts-check` opt-in, local paths in the docs (only placeholder drive paths are allowed), and the syntax of both JS files (compiled through `node:vm`, never executed).
 
 Read [AGENTS.md](AGENTS.md) before changing code: it lists the constraints that must not break, the fixed names, the release flow and the privacy rules.
 
@@ -199,7 +199,7 @@ Verified on Windows + Edge (DSH Web on `127.0.0.1`):
 - once the approval is decided (allow or reject) the notification for that request closes;
 - **Send a test notification** proves the channel independently;
 - **announcement timing (0.2.0)**: while you look at the conversation page → **no toast**; after switching away or minimizing → **toast**; coming back → the notification closes;
-- **types and static checks (0.2.1)**: `npm test` and GitHub Actions both pass (clean runner: `npm ci` + typecheck + 37 checks);
+- **types and static checks (0.2.1)**: `npm test` and GitHub Actions both pass (clean runner: `npm ci` + typecheck + 41 checks);
 - **reminder chime (0.5.0)**: verified on Windows + Edge — the chime is audible for task-finished reminders both in true fullscreen and in Bilibili “web fullscreen”; the “notification `silent` while the chime plays, exactly one sound per reminder” pairing is covered by `npm test` / `node --check` and a sandbox behaviour harness.
 - **question reminder (0.5.0)**: recognising `ask_user_question` / `plan-review`, the copy, the `tag`, deduplication, “silent while you look, announced once you leave” and skipping review cards are each asserted in a local stub environment (a fake `uiSession.sessionStatus` plus a fake `Notification`); **whether the real system notification appears still needs a real run to confirm**.
 

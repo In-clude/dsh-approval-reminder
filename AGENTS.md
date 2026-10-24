@@ -31,7 +31,7 @@
 
 ```powershell
 npm ci            # 仅 devDependencies：typescript、@types/react
-npm test          # = npm run typecheck + node scripts/check.mjs（37 项）
+npm test          # = npm run typecheck + node scripts/check.mjs（41 项）
 node --check client.js
 ```
 
@@ -42,10 +42,11 @@ node --check client.js
 
 ## 4. 隐私与安全
 
-- 提交内容里**不得**出现本机路径（`C:\Users\<用户名>`、`D:\真\...`）、token、密钥、`approval-probe*` 之类测试残留；README 示例只用占位路径。
+- 提交内容里**不得**出现本机路径、token、密钥、`approval-probe*` 之类测试残留；文档示例只能写占位路径（`C:\Users\<用户名>`、`D:\path\to\project`），README 同样只用占位路径。
+- `scripts/check.mjs` 会扫描 `AGENTS.md` / `README.md` / `README.en.md` / `CHANGELOG.md` 里的盘符路径，非占位写法直接失败——这条检查就是为了拦住已经发生过的本机路径泄漏。
 - 提交身份固定 `In-clude <In-clude@users.noreply.github.com>`（仓库级 `git config`，不改全局）。
 - `.env`、日志、`node_modules/` 不提交（`.gitignore` 已覆盖）；不提交 `package-lock.json` 之外的锁文件。
-- 推送前自查：`git grep -nE 'C:\\\\Users|AppData|ghp_|sk-[A-Za-z0-9]{16,}|BEGIN (RSA|OPENSSH|PRIVATE)' origin/main`。
+- 推送前自查：`npm test` 必须全绿（含上面 `scripts/check.mjs` 的文档盘符路径扫描）；推送后如有疑问，再 `git grep -n 'Users' origin/main` 人工确认只剩占位写法。
 
 ## 5. 本机安装与热更新
 
