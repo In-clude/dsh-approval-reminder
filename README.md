@@ -171,7 +171,7 @@ dsh plugin --profile web add "D:\path\to\dsh-approval-reminder"
 | `types/globals.d.ts` | 模块加载器 `require('react')`、`window.__ModuleLoader__` 的声明 |
 | `types/dsh-client.d.ts` | DSH 客户端契约的本地最小声明（状态快照、pending interaction、locale、slots） |
 | `jsconfig.json` | `checkJs` + `strict` 的类型检查配置 |
-| `scripts/check.mjs` | 无依赖静态检查（37 项） |
+| `scripts/check.mjs` | 无依赖静态检查（41 项） |
 | `AGENTS.md` | 项目规则：不可破坏的约束、命名、提交前检查、隐私与收录流程 |
 | `.github/workflows/check.yml` | CI：`npm ci` → 类型检查 → 静态检查 |
 
@@ -182,12 +182,12 @@ dsh plugin --profile web add "D:\path\to\dsh-approval-reminder"
 ```powershell
 npm install              # 只装开发期依赖
 npm run typecheck        # tsc -p jsconfig.json
-npm test                 # = typecheck + node scripts/check.mjs（37 项）
+npm test                 # = typecheck + node scripts/check.mjs（41 项）
 ```
 
 `client.js` 首行是 `// @ts-check`，配合 `jsconfig.json`（`checkJs`、`strict`）与 `types/*.d.ts`：`window.__ModuleLoader__`、`require('react')` 都有真实类型，DSH 客户端契约用本地最小声明描述。于是 VS Code 这类编辑器打开仓库即有补全与错误提示，**不需要引入任何 Harness 客户端包**。
 
-静态检查覆盖：manifest 字段与 `exports` 指向、locale 元数据、patch 行、`AGENTS.md` 存在、`// @ts-check` 未被移除、两个 JS 文件的语法（`node:vm` 编译检查，不执行代码）。
+静态检查覆盖：manifest 字段与 `exports` 指向、locale 元数据、patch 行、`AGENTS.md` 存在、`// @ts-check` 未被移除、文档里的本机路径（盘符路径只允许占位写法）、两个 JS 文件的语法（`node:vm` 编译检查，不执行代码）。
 
 改代码前请先读 [AGENTS.md](AGENTS.md)：里面写着不能破坏的约束、固定命名、发布流程与隐私规则。
 
@@ -199,7 +199,7 @@ npm test                 # = typecheck + node scripts/check.mjs（37 项）
 - 审批作出决定（允许或拒绝）后，插件关闭该请求对应的通知；
 - 「发送测试通知」可独立验证通道；
 - **提醒时机（0.2.0）**：请求挂起时你正看着对话页 → **不弹**；切到别的窗口/最小化后 → **弹出**；回到页面 → 通知自动关闭；
-- **类型与静态检查（0.2.1 起）**：`npm test` 与 GitHub Actions 均通过（干净 runner 上 `npm ci` + typecheck + 37 项检查）。
+- **类型与静态检查（0.2.1 起）**：`npm test` 与 GitHub Actions 均通过（干净 runner 上 `npm ci` + typecheck + 41 项检查）。
 - **提醒提示音（0.5.0）**：已在 Windows + Edge 实测：真全屏与 B站「网页全屏」看视频时，任务完成提醒都能听到提示音；「提示音可用时通知设为 `silent`、每次提醒恰好响一次」的配对由 `npm test` / `node --check` 与沙箱行为校验覆盖。
 - **提问提醒（0.5.0）**：`ask_user_question` / `plan-review` 的识别、文案、`tag`、去重、“正在看页面时不弹、切走后补发”、回顾卡跳过，均由本地桩环境（假 `uiSession.sessionStatus` + 假 `Notification`）逐条断言通过；**真实提问场景下的系统通知是否弹出仍需实测确认**。
 
