@@ -29,6 +29,7 @@ The plugin is plain JavaScript — **no runtime dependencies, no build step** �
 - [Install](#install)
 - [First-time permission](#first-time-permission)
 - [Using it and testing the channel](#using-it-and-testing-the-channel)
+- [Troubleshooting: no notification in fullscreen](#troubleshooting-no-notification-in-fullscreen)
 - [How it works](#how-it-works)
 - [Security and privacy](#security-and-privacy)
 - [Repository layout](#repository-layout)
@@ -83,7 +84,7 @@ What it does **not** do: it does not change outcomes, does not touch sandbox pol
 ## Requirements
 
 1. Windows **Settings → System → Notifications** must allow **Microsoft Edge** (when it is off, Windows drops web notifications).
-2. Do not be in Focus assist / Do not disturb.
+2. Do not be in Focus assist / Do Not Disturb — and check Windows' automatic DND: **Settings → System → Notifications → Automatically turn on Do Not Disturb** is on by default for “when using an app in full-screen mode” on Windows 11, and while it is on, fullscreen silently drops notifications. Clear that box — see [Troubleshooting: no notification in fullscreen](#troubleshooting-no-notification-in-fullscreen).
 3. Keep the DSH Web page open — minimizing is fine, but a closed tab stops the notifications (no Service Worker / Push here).
 4. Allow notifications for this site in Edge once — see [First-time permission](#first-time-permission).
 
@@ -131,6 +132,16 @@ If you accidentally pressed “Block”: click the site icon at the left of Edge
 
   Key fields: `viewing` (whether the page counts as “being viewed”), `visibility` / `focused`, the `outer` / `inner` / `screen` sizes, `permission`, `soundEnabled` / `doneEnabled`, `chimeReady`, `soundPlayed`, and `pendingKinds` (the kinds of interaction waiting for you in that snapshot).
 - **Too noisy?** One `sessionId + request key` is announced exactly once, and a notification that is already on screen is closed when you come back to the page.
+
+## Troubleshooting: no notification in fullscreen
+
+While the browser is fullscreen (F11, web-fullscreen video, a presentation), a missing notification usually means the reminder was raised but something outside the plugin swallowed it. Check these in order:
+
+1. **Windows' automatic Do Not Disturb**: Windows 11 turns DND on by default “when using an app in full-screen mode”, and DND silently drops every notification (not just web ones). Open **Settings → System → Notifications → Automatically turn on Do Not Disturb** and clear **“When using an app in full-screen mode”**; clear “When duplicating my display”, “When playing a game” and “For the first hour after Windows updates” too if you want them out of the way.
+2. **DND / Focus assist turned on manually**: check the notification centre (the moon / bell icon in the taskbar) and switch it off.
+3. **Turn on the reminder chime** (the fullscreen fallback, **off by default**): DSH **Settings → General → Reminder chime**. With it on, every reminder plays a two-tone chime and the desktop notification is marked silent so it does not sound twice — even when Chromium's fullscreen blocker still suppresses the popup, you hear the sound. The **Play the chime** button confirms the audio channel first.
+
+If neither sound nor popup appears, open the [debug switch](#using-it-and-testing-the-channel) in the page console and read the decision log. `soundPlayed: true` with no sound and no popup means the problem is in the Windows notification layer (DND, the master notification switch, volume), not in the plugin; `chimeReady: false` means click the page once (user gesture) and try again.
 
 ## How it works
 
@@ -210,7 +221,7 @@ Not covered: headless / API Sessions, reminders after the page is closed, macOS 
 - Browser Sessions only; headless / API Sessions produce no notifications.
 - Chromium (Edge) on Windows does not support “allow / reject” actions on notifications, so a notification only reminds you — open the conversation to answer.
 - Whether a notification is actually displayed depends on Windows notification settings and Focus assist; the plugin cannot override that.
-- **Desktop notifications can be dropped silently**: Chromium suppresses web-notification popups while a browser window is fullscreen (its fullscreen notification blocker), and Windows may suppress them in other states such as web-fullscreen video playback; no web API can guarantee the popup, so the chime is the reliable channel.
+- **Desktop notifications can be dropped silently**: Chromium suppresses web-notification popups while a browser window is fullscreen (its fullscreen notification blocker), and Windows may suppress them in other states such as web-fullscreen video playback; the OS-side “Automatically turn on Do Not Disturb” can be cleared (see [Troubleshooting: no notification in fullscreen](#troubleshooting-no-notification-in-fullscreen)), but no web API can guarantee the popup, so the chime is the reliable channel.
 - The chime needs an audio context unlocked by a user gesture: if the page was never clicked or typed into after loading, no sound is produced (browser autoplay policy); the notification then keeps the system sound.
 - During web fullscreen (e.g. Bilibili “web fullscreen”) the popup may not appear if the system suppresses notifications; the chime still plays.
 - With several tabs open, each page notifies about the requests it received.
