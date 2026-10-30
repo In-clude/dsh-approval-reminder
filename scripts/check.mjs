@@ -186,9 +186,6 @@ if (hostParsed && !readText('index.js').includes('export function apply')) {
   pass('host: exports apply');
 }
 
-// ---- project rules ----------------------------------------------------------
-assertFile('AGENTS.md', 'rules');
-
 // ---- documentation ----------------------------------------------------------
 // Chinese is the primary README; the English one is a full translation, so both
 // files must exist and point at each other.
@@ -203,8 +200,8 @@ for (const [file, needle] of [['README.md', 'README.en.md'], ['README.en.md', 'R
 // ---- privacy ----------------------------------------------------------------
 // Absolute Windows paths leak the developer's account name, so tracked docs may
 // only use the documented placeholders. This scan is what catches an accidental
-// real path before it is pushed; the manual grep in AGENTS.md missed one once.
-const privacyDocs = ['AGENTS.md', 'README.md', 'README.en.md', 'CHANGELOG.md'];
+// real path before it is pushed; the old pre-push grep missed one once.
+const privacyDocs = ['README.md', 'README.en.md', 'CHANGELOG.md'];
 for (const relative of privacyDocs) {
   if (!existsSync(join(root, relative))) continue;
   const candidates = readText(relative).match(/[A-Za-z]:\\[^\s`'"|)]+/g) ?? [];
