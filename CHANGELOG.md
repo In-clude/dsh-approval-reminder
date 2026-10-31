@@ -3,6 +3,21 @@
 本项目的显著变更记录在这里，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [0.6.0] - 2026-10-31
+
+### Changed
+
+- 设置位置调整：「审批桌面通知」「任务完成通知」「提醒提示音」三行从 **设置 → 通用** 移到新的独立设置页
+  **设置 → 通知提醒**（`settings.section`，`order: 25`），设置面板左侧导航新增「通知提醒」/「Notifications」
+  一项。三行仍各自独立可配，通知行为、默认值与 `localStorage` 键都不变。
+- 设置页只渲染一份共享样式表，三行不再各自插入 `<style>`；页面内最后一行不显示分隔线。
+- 文档中的导航路径同步为「设置 → 通知提醒」（中文版与英文版内容对等）。
+
+### Removed
+
+- 移除了三条 `settings.general.item` 注册（`approval-reminder`、`approval-reminder-done`、
+  `approval-reminder-sound`），改用一条 `settings.section` 页面注册。
+
 ## [0.5.0] - 2026-10-23
 
 ### Added

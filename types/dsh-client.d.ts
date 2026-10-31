@@ -65,6 +65,8 @@ interface ClientSlotOptions {
   name: string;
   id: string;
   order?: number;
+  /** Left-nav display text for a `settings.section` entry; a thunk re-reads on every projection. */
+  label?: string | (() => string);
   locale?: string;
   inject?: () => Readonly<Record<string, unknown>>;
 }
@@ -102,16 +104,25 @@ interface NotifierDeps {
   report(error: unknown): void;
 }
 
-/** Props the General-settings row receives (owner props are empty). */
+/** Props the approval-notification row receives from the settings page. */
 interface ApprovalReminderRowProps {
   t: Translate;
   requestPermission(): Promise<ApprovalPermission>;
   sendTest(): boolean;
 }
 
-/** Props a General-settings switch row receives. */
+/** Props a switch row receives from the settings page. */
 interface SwitchRowProps {
   t: Translate;
   /** Injected by the sound row only: preview the reminder chime. */
   playSound?(): void;
+}
+
+/**
+ * Props of the notifications settings page: its own inject face plus the shell's
+ * owner props (only `close`, which this page does not use).
+ */
+interface NotificationsSectionProps extends ApprovalReminderRowProps, SwitchRowProps {
+  playSound(): void;
+  close?(): void;
 }

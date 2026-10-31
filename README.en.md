@@ -104,14 +104,14 @@ dsh plugin --profile web add "D:\path\to\dsh-approval-reminder"
 3) Or use Settings → Plugins in the DSH Web UI to install / enable / disable / remove it.
 ```
 
-How to tell it is live: three rows named **Approval desktop notifications**, **Task-finished notifications** and **Reminder chime** appear under **Settings → General**. The bundle activates as one plugin entry of the current profile; usually no DSH restart is needed, and a browser reload is enough.
+How to tell it is live: the **Notifications** page in **Settings** shows three rows — **Approval desktop notifications**, **Task-finished notifications** and **Reminder chime**. The bundle activates as one plugin entry of the current profile; usually no DSH restart is needed, and a browser reload is enough.
 
 ## First-time permission
 
 Browsers only grant notification permission on a **user gesture**, so there are two paths — either one is enough:
 
 - on the **first click or key press** after the page loads, the plugin asks once (at most once per page load);
-- or open **Settings → General → Approval desktop notifications** and press **Enable**.
+- or open **Settings → Notifications → Approval desktop notifications** and press **Enable**.
 
 Once granted, that row reads **Enabled** and gains a **Send a test notification** button. That same gesture also unlocks the chime's audio context (browsers only allow audio after a user gesture; without it the notification keeps the system sound).
 
@@ -119,11 +119,11 @@ If you accidentally pressed “Block”: click the site icon at the left of Edge
 
 ## Using it and testing the channel
 
-- **Self-test**: Settings → General → **Approval desktop notifications** → with the state at **Enabled**, press **Send a test notification**; a system notification titled “Approval desktop notifications” should appear. This needs no real approval.
+- **Self-test**: Settings → Notifications → **Approval desktop notifications** → with the state at **Enabled**, press **Send a test notification**; a system notification titled “Approval desktop notifications” should appear. This needs no real approval.
 - **Real check**: any tool call that needs approval triggers it. If you are looking at the page it deliberately stays silent — switch the window away and the pending request is announced.
 - **Question check**: have the agent call `ask_user_question` (for example, ask it to “ask me with options what I should do first today”). It also stays silent while you are looking at the page; switch the window away and the pending question is announced with the title “A choice is needed”.
-- **Task-finished notifications**: use the switch in Settings → General → **Task-finished notifications** to enable or disable them (on by default; the choice is stored in this browser). Send a message, switch the window away, and the end of the turn raises a “Task finished” notification.
-- **Reminder chime**: the switch in Settings → General → **Reminder chime** (**off by default**; turn it on when you need the audio fallback). With it on, every reminder plays a two-tone chime and the desktop notification is marked silent so it does not sound twice — the chime is still heard when the notification is suppressed (browser fullscreen, Windows suppression). With it off, notifications keep the system sound. The **Play the chime** button next to it checks the audio channel at any time (the click itself counts as the user gesture that unlocks the audio context).
+- **Task-finished notifications**: use the switch in Settings → Notifications → **Task-finished notifications** to enable or disable them (on by default; the choice is stored in this browser). Send a message, switch the window away, and the end of the turn raises a “Task finished” notification.
+- **Reminder chime**: the switch in Settings → Notifications → **Reminder chime** (**off by default**; turn it on when you need the audio fallback). With it on, every reminder plays a two-tone chime and the desktop notification is marked silent so it does not sound twice — the chime is still heard when the notification is suppressed (browser fullscreen, Windows suppression). With it off, notifications keep the system sound. The **Play the chime** button next to it checks the audio channel at any time (the click itself counts as the user gesture that unlocks the audio context).
 - **Troubleshooting "no notice / no sound"**: in the DSH page, open F12 → Console and run `localStorage.setItem('dsh-approval-reminder:debug','1')` (clear it with `localStorage.removeItem('dsh-approval-reminder:debug')` when done). Every reminder decision is then written to this tab's `sessionStorage` (key `dsh-approval-reminder:log`, up to 100 entries) and mirrored to the console. **After** reproducing, read it back with the command below — DevTools does not have to be open while the event happens:
 
   ```js
@@ -139,7 +139,7 @@ While the browser is fullscreen (F11, web-fullscreen video, a presentation), a m
 
 1. **Windows' automatic Do Not Disturb**: Windows 11 turns DND on by default “when using an app in full-screen mode”, and DND silently drops every notification (not just web ones). Open **Settings → System → Notifications → Automatically turn on Do Not Disturb** and clear **“When using an app in full-screen mode”**; clear “When duplicating my display”, “When playing a game” and “For the first hour after Windows updates” too if you want them out of the way.
 2. **DND / Focus assist turned on manually**: check the notification centre (the moon / bell icon in the taskbar) and switch it off.
-3. **Turn on the reminder chime** (the fullscreen fallback, **off by default**): DSH **Settings → General → Reminder chime**. With it on, every reminder plays a two-tone chime and the desktop notification is marked silent so it does not sound twice — even when Chromium's fullscreen blocker still suppresses the popup, you hear the sound. The **Play the chime** button confirms the audio channel first.
+3. **Turn on the reminder chime** (the fullscreen fallback, **off by default**): DSH **Settings → Notifications → Reminder chime**. With it on, every reminder plays a two-tone chime and the desktop notification is marked silent so it does not sound twice — even when Chromium's fullscreen blocker still suppresses the popup, you hear the sound. The **Play the chime** button confirms the audio channel first.
 
 If neither sound nor popup appears, open the [debug switch](#using-it-and-testing-the-channel) in the page console and read the decision log. `soundPlayed: true` with no sound and no popup means the problem is in the Windows notification layer (DND, the master notification switch, volume), not in the plugin; `chimeReady: false` means click the page once (user gesture) and try again.
 
@@ -155,7 +155,7 @@ If neither sound nor popup appears, open the [debug switch](#using-it-and-testin
 | Reminder chime | A desktop notification can be dropped silently: Chromium suppresses popups while a browser window is fullscreen, and Windows may suppress them in other states (web-fullscreen video, for example). So, when the **switch is on and** the chime is available (the `AudioContext` was unlocked by a user gesture and is running), the notification is created `silent` and a two-tone Web Audio chime plays — the reminder sounds **exactly once** whichever channel survives; when the switch is off or audio is unavailable the notification stays audible. The switch lives in `localStorage` under `dsh-approval-reminder:chime`, **off by default** |
 | Click | `uiWorkspace.openSession(sessionId)` + `window.focus()` + `close()` |
 | Failure handling | A refused construction is logged under the `[approval-reminder]` console prefix and marked as attempted, so later snapshot changes do not retry it |
-| Cleanup | Subscriptions, gesture and visibility listeners, the settings rows, and open notifications are all released with the plugin |
+| Cleanup | Subscriptions, gesture and visibility listeners, the settings page, and open notifications are all released with the plugin |
 | Host half | An empty shell (`index.js` is just `apply() {}`): no Service, no Tool, no Config, no session events |
 
 **Why not listen to `approval/request` / `user-questions/request`?** On the client those waterfalls are forwarded to every listener; any listener that returns a result (or wraps `next()`) can claim or block the Host panel, and registration order is not under our control. Reading the pending-interaction snapshot is read-only and cannot change an outcome.
@@ -174,7 +174,7 @@ If neither sound nor popup appears, open the [debug switch](#using-it-and-testin
 
 | Path | Purpose |
 | --- | --- |
-| `client.js` | The browser bundle: notification channel + reminder chime + all three settings rows (first line `// @ts-check`) |
+| `client.js` | The browser bundle: notification channel + reminder chime + one notifications settings page (three rows) (first line `// @ts-check`) |
 | `index.js` | Host-half shell (makes the package an installable Loader entry) |
 | `cordis.patch.yml` | The bundle's Loader patch: inserts the `approval-reminder` row |
 | `locale/en.json`, `locale/zh.json` | Plugin card title and description |
@@ -237,7 +237,7 @@ Not covered: headless / API Sessions, reminders after the page is closed, macOS 
 dsh plugin --profile web remove dsh-approval-reminder
 ```
 
-Or disable / remove it from **Settings → Plugins**. Uninstalling removes the notifications and all three settings rows and leaves no Session data behind.
+Or disable / remove it from **Settings → Plugins**. Uninstalling removes the notifications and the settings page and leaves no Session data behind.
 
 ## Market listing
 
@@ -252,7 +252,7 @@ Listing requirements: `package.json` declares `dsh.bundle`, the repository is at
 
 ## Version and changelog
 
-Current version `0.5.0`. See [CHANGELOG.md](CHANGELOG.md); the project follows semantic versioning — behaviour changes bump minor, documentation-only changes do not bump the version.
+Current version `0.6.0`. See [CHANGELOG.md](CHANGELOG.md); the project follows semantic versioning — behaviour changes bump minor, documentation-only changes do not bump the version.
 
 ## License
 

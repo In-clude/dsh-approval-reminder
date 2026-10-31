@@ -30,6 +30,7 @@ window.__ModuleLoader__.load({
       'notify.test.body': '通知通道可用：命令等待审批时会在这里提醒你。',
       'question.title': '需要你的选择',
       'question.body': '智能体在等你从选项里选一个',
+      'section.nav': '通知提醒',
       'row.title': '审批桌面通知',
       'row.description': '只在你没看这个页面时提醒：命令等待审批、或智能体提问等你选择，而本页面在后台或未聚焦时，用 Edge 桌面通知提醒你。',
       'row.granted': '已开启',
@@ -62,6 +63,7 @@ window.__ModuleLoader__.load({
       'notify.test.body': 'The channel works: a command waiting for approval will appear here.',
       'question.title': 'A choice is needed',
       'question.body': 'The agent is waiting for you to pick an option',
+      'section.nav': 'Notifications',
       'row.title': 'Approval desktop notifications',
       'row.description': 'Notify me only while I am not looking at this page: an Edge desktop notification appears when a command waits for approval or the agent asks you to choose, while this page is in the background or unfocused.',
       'row.granted': 'Enabled',
@@ -81,11 +83,13 @@ window.__ModuleLoader__.load({
     };
 
     /**
-     * Row styles. Colors come from the public theme tokens only, so light and
-     * dark themes follow without overrides; the spacing and type sizes copy an
-     * existing General-section row.
+     * Page and row styles. Colors come from the public theme tokens only, so
+     * light and dark themes follow without overrides; the spacing and type sizes
+     * copy an existing General-section row.
      */
     const CSS = [
+      '.dsh-approval-reminder-section{display:flex;flex-direction:column;width:100%}',
+      '.dsh-approval-reminder-section>.dsh-approval-reminder-row:last-child{border-bottom:none}',
       '.dsh-approval-reminder-row{display:flex;justify-content:space-between;align-items:center;gap:24px;padding:16px 0;border-bottom:.5px solid var(--dsw-alias-border-l2)}',
       '.dsh-approval-reminder-text{min-width:0}',
       '.dsh-approval-reminder-title{font-size:14px;line-height:20px;color:var(--dsw-alias-label-primary)}',
@@ -747,9 +751,9 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * General-settings row: current permission state, the enable path, and a
-     * test notification.
-     * @param {ApprovalReminderRowProps} props slot props: the localized `t` and the injected face.
+     * One row of the notifications settings page: current permission state, the
+     * enable path, and a test notification.
+     * @param {ApprovalReminderRowProps} props row props: the localized `t` and the injected face.
      * @returns {import('react').ReactElement} the preference row.
      */
     function ApprovalReminderRow(props) {
@@ -806,7 +810,6 @@ window.__ModuleLoader__.load({
       }
 
       return h('div', { className: 'dsh-approval-reminder-row' }, [
-        h('style', { key: 'style' }, CSS),
         h('div', { key: 'text', className: 'dsh-approval-reminder-text' }, [
           h('div', { key: 'title', className: 'dsh-approval-reminder-title' }, t('row.title')),
           h('div', { key: 'description', className: 'dsh-approval-reminder-description' }, t('row.description')),
@@ -817,10 +820,10 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * General-settings row: one switch bound to a `localStorage` preference,
-     * plus an optional button that exercises an injected action (the chime
-     * preview). The choice lives in this browser, so it applies immediately and
-     * survives reloads without a Host round-trip.
+     * One row of the notifications settings page: a switch bound to a
+     * `localStorage` preference, plus an optional button that exercises an
+     * injected action (the chime preview). The choice lives in this browser, so
+     * it applies immediately and survives reloads without a Host round-trip.
      * @param {{ titleKey: string, descriptionKey: string, testLabelKey?: string, read: () => boolean, write: (enabled: boolean) => void }} spec
      * @returns {(props: SwitchRowProps) => import('react').ReactElement}
      */
@@ -853,7 +856,6 @@ window.__ModuleLoader__.load({
           onClick: toggle,
         }, h('span', { className: 'dsh-approval-reminder-switch-thumb' })));
         return h('div', { className: 'dsh-approval-reminder-row' }, [
-          h('style', { key: 'style' }, CSS),
           h('div', { key: 'text', className: 'dsh-approval-reminder-text' }, [
             h('div', { key: 'title', className: 'dsh-approval-reminder-title' }, t(spec.titleKey)),
             h('div', { key: 'description', className: 'dsh-approval-reminder-description' }, t(spec.descriptionKey)),
@@ -880,13 +882,36 @@ window.__ModuleLoader__.load({
       write: writeSoundPref,
     });
 
+    /**
+     * The notifications settings page: one left-nav entry that owns the three
+     * preference rows (approval notifications, task-finished notifications, and
+     * the reminder chime). All three are independent; grouping them keeps the
+     * General page focused on shell-level preferences. The page renders the
+     * shared stylesheet once, and the row components render only their content.
+     * @param {NotificationsSectionProps} props section props: the localized `t` and the injected face.
+     * @returns {import('react').ReactElement} the settings page body.
+     */
+    function NotificationsSection(props) {
+      return h('div', { className: 'dsh-approval-reminder-section' }, [
+        h('style', { key: 'style' }, CSS),
+        h(ApprovalReminderRow, {
+          key: 'approval',
+          t: props.t,
+          requestPermission: props.requestPermission,
+          sendTest: props.sendTest,
+        }),
+        h(CompletionReminderRow, { key: 'done', t: props.t }),
+        h(SoundReminderRow, { key: 'sound', t: props.t, playSound: props.playSound }),
+      ]);
+    }
+
     /** Services this Client half cannot activate without. */
     const inject = ['slots', 'locale'];
 
     /**
      * Install the notification channel (silent while the page is being viewed),
      * the gesture hooks (notification permission + audio unlock), the reminder
-     * chime, and the General-settings rows.
+     * chime, and the notifications settings page.
      * @param {ClientPluginContext} ctx Client root context.
      */
     function apply(ctx) {
@@ -963,34 +988,23 @@ window.__ModuleLoader__.load({
       ctx.effect(() => installGestureHooks(notifier, chime), 'approval-reminder: gesture hooks');
       ctx.effect(() => () => { chime.dispose(); }, 'approval-reminder: alert sound');
 
-      // One inject call for all rows: the shipped settings plugins register
-      // several entries into the same slot with one generator, and a second
-      // `inject` on the same key is not guaranteed to coexist with the first.
-      ctx.slots.inject('settings.general.item', function* () {
-        yield ctx.slots.register({
-          name: 'settings.general.item',
-          id: 'approval-reminder',
-          order: 21,
-          locale: NS,
-          inject: () => ({
-            requestPermission: () => notifier.requestPermission(),
-            sendTest: () => notifier.test(),
-          }),
-        }, ApprovalReminderRow);
-        yield ctx.slots.register({
-          name: 'settings.general.item',
-          id: 'approval-reminder-done',
-          order: 22,
-          locale: NS,
-        }, CompletionReminderRow);
-        yield ctx.slots.register({
-          name: 'settings.general.item',
-          id: 'approval-reminder-sound',
-          order: 23,
-          locale: NS,
-          inject: () => ({ playSound: () => { chime.play(); } }),
-        }, SoundReminderRow);
-      });
+      // One settings page owns all three preference rows: `settings.section` is
+      // the slot for a whole page, and its label is the left-nav entry. The
+      // inject face supplies the `t` the shell does not hand to sections, plus
+      // the actions the rows exercise.
+      ctx.slots.inject('settings.section', () => ctx.slots.register({
+        name: 'settings.section',
+        id: 'approval-reminder',
+        order: 25,
+        label: () => t('section.nav'),
+        locale: NS,
+        inject: () => ({
+          t,
+          requestPermission: () => notifier.requestPermission(),
+          sendTest: () => notifier.test(),
+          playSound: () => { chime.play(); },
+        }),
+      }, NotificationsSection));
     }
 
     return { inject, apply };
