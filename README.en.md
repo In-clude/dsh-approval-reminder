@@ -137,6 +137,8 @@ If you accidentally pressed “Block”: click the site icon at the left of Edge
 
 While the browser is fullscreen (F11, web-fullscreen video, a presentation), a missing notification usually means the reminder was raised but something outside the plugin swallowed it. Check these in order:
 
+![Windows 11 Settings → System → Notifications (Chinese UI): “Automatically turn on Do Not Disturb” lives on this page and is expanded in step 1](docs/images/windows11-notification-settings.png)
+
 1. **Windows' automatic Do Not Disturb**: Windows 11 turns DND on by default “when using an app in full-screen mode”, and DND silently drops every notification (not just web ones). Open **Settings → System → Notifications → Automatically turn on Do Not Disturb** and clear **“When using an app in full-screen mode”**; clear “When duplicating my display”, “When playing a game” and “For the first hour after Windows updates” too if you want them out of the way.
 2. **DND / Focus assist turned on manually**: check the notification centre (the moon / bell icon in the taskbar) and switch it off.
 3. **Turn on the reminder chime** (the fullscreen fallback, **off by default**): DSH **Settings → Notifications → Reminder chime**. With it on, every reminder plays a two-tone chime and the desktop notification is marked silent so it does not sound twice — even when Chromium's fullscreen blocker still suppresses the popup, you hear the sound. The **Play the chime** button confirms the audio channel first.
