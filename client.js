@@ -2,7 +2,7 @@
 /**
  * dsh-approval-reminder — browser half.
  *
- * Raises one Windows/Edge desktop notification per pending approval request or
+ * Raises one Windows desktop notification per pending approval request or
  * per pending question the agent waits on the user to answer. The reminder only
  * observes the Client Session status snapshot published by the `uiSession`
  * service; it never joins the `approval/request` or `user-questions/request`
@@ -32,7 +32,7 @@ window.__ModuleLoader__.load({
       'question.body': '智能体在等你从选项里选一个',
       'section.nav': '通知提醒',
       'row.title': '审批桌面通知',
-      'row.description': '只在你没看这个页面时提醒：命令等待审批、或智能体提问等你选择，而本页面在后台或未聚焦时，用 Edge 桌面通知提醒你。',
+      'row.description': '只在你没看这个页面时提醒：命令等待审批、或智能体提问等你选择，而本页面在后台或未聚焦时，用 Windows 桌面通知提醒你。',
       'row.granted': '已开启',
       'row.default': '未开启',
       'row.denied': '已被浏览器阻止',
@@ -65,7 +65,7 @@ window.__ModuleLoader__.load({
       'question.body': 'The agent is waiting for you to pick an option',
       'section.nav': 'Notifications',
       'row.title': 'Approval desktop notifications',
-      'row.description': 'Notify me only while I am not looking at this page: an Edge desktop notification appears when a command waits for approval or the agent asks you to choose, while this page is in the background or unfocused.',
+      'row.description': 'Notify me only while I am not looking at this page: a Windows desktop notification appears when a command waits for approval or the agent asks you to choose, while this page is in the background or unfocused.',
       'row.granted': 'Enabled',
       'row.default': 'Off',
       'row.denied': 'Blocked by the browser',

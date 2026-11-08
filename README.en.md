@@ -6,7 +6,7 @@
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![node](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](package.json)
 
-Raise an **Edge / Windows desktop notification** while a command waits for approval, the agent waits for you to pick an option, or a Session finishes a turn in DeepSeek Harness.
+Raise a **Windows desktop notification** while a command waits for approval, the agent waits for you to pick an option, or a Session finishes a turn in DeepSeek Harness.
 
 Target: **the DeepSeek Harness (DSH) Web UI with Microsoft Edge on Windows.**
 The plugin is plain JavaScript — **no runtime dependencies, no build step** — and the Host half is an empty shell entry.
@@ -207,7 +207,7 @@ Project rules live in a local `AGENTS.md` (git-ignored, not published with the r
 
 Verified on Windows + Edge (DSH Web on `127.0.0.1`):
 
-- a command waiting for approval **raises** an Edge/Windows desktop notification; **clicking** it closes the notification and returns to that conversation;
+- a command waiting for approval **raises** a Windows desktop notification; **clicking** it closes the notification and returns to that conversation;
 - once the approval is decided (allow or reject) the notification for that request closes;
 - **Send a test notification** proves the channel independently;
 - **announcement timing (0.2.0)**: while you look at the conversation page → **no toast**; after switching away or minimizing → **toast**; coming back → the notification closes;

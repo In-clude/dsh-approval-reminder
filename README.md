@@ -6,7 +6,7 @@
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![node](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](package.json)
 
-命令在 DeepSeek Harness 里等待审批、智能体提问等你选择、或会话跑完一轮时，用 **Edge / Windows 桌面通知**提醒你。
+命令在 DeepSeek Harness 里等待审批、智能体提问等你选择、或会话跑完一轮时，用 **Windows 桌面通知**提醒你。
 
 适用对象：**DeepSeek Harness（DSH）Web 界面 + Windows 上的 Microsoft Edge**。
 插件本体是纯 JavaScript：**运行时零依赖、零构建**，宿主侧只是一个空壳条目。
@@ -207,7 +207,7 @@ npm test                 # = typecheck + node scripts/check.mjs（39 项）
 
 在 Windows + Edge（DSH Web `127.0.0.1`）上实测通过：
 
-- 命令等待审批时**弹出** Edge/Windows 桌面通知；**点击**后通知消失并回到对应会话；
+- 命令等待审批时**弹出** Windows 桌面通知；**点击**后通知消失并回到对应会话；
 - 审批作出决定（允许或拒绝）后，插件关闭该请求对应的通知；
 - 「发送测试通知」可独立验证通道；
 - **提醒时机（0.2.0）**：请求挂起时你正看着对话页 → **不弹**；切到别的窗口/最小化后 → **弹出**；回到页面 → 通知自动关闭；
