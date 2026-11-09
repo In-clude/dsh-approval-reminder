@@ -3,6 +3,17 @@
 本项目的显著变更记录在这里，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### Added
+
+- 已发布到 npm：`dsh-approval-reminder@0.6.0`（npm staged publishing，2FA 放行后上线），
+  可直接用 `dsh plugin --profile web add dsh-approval-reminder` 安装已发布版本。
+
+### Changed
+
+- 文档：README（中文/英文同步）安装章节新增 npm 安装方式，编号顺延为 1) npm / 2) GitHub 简写 / 3) 本地目录。
+
 ## [0.6.0] - 2026-10-31
 
 ### Changed

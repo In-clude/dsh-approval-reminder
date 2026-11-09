@@ -93,15 +93,18 @@ DSH 在命令需要更高权限时会发起一次审批请求（例如沙箱拒�
 在装好 DSH 的机器上任选一种：
 
 ```powershell
-# 1) 从 GitHub 安装（pnpm 的 GitHub 简写）
+# 1) 从 npm 安装（已发布的版本）
+dsh plugin --profile web add dsh-approval-reminder
+
+# 2) 从 GitHub 安装（pnpm 的 GitHub 简写）
 dsh plugin --profile web add In-clude/dsh-approval-reminder
 
-# 2) 从本地目录安装（开发/改代码时）
+# 3) 从本地目录安装（开发/改代码时）
 dsh plugin --profile web add "D:\path\to\dsh-approval-reminder"
 ```
 
 ```text
-3) 也可以在 DSH Web 的 设置 → 插件 页里安装/启用/禁用/卸载。
+4) 也可以在 DSH Web 的 设置 → 插件 页里安装/启用/禁用/卸载。
 ```
 
 安装生效的判断标准：**设置 → 通知提醒** 页里依次是「审批桌面通知」「任务完成通知」「提醒提示音」三行。bundle 会作为当前 profile 的一个插件条目激活，通常不需要重启 DSH；浏览器端刷新一次页面即可。

@@ -93,15 +93,18 @@ What it does **not** do: it does not change outcomes, does not touch sandbox pol
 Pick one, on the machine that runs DSH:
 
 ```powershell
-# 1) From GitHub (pnpm's GitHub shorthand)
+# 1) From npm (the published version)
+dsh plugin --profile web add dsh-approval-reminder
+
+# 2) From GitHub (pnpm's GitHub shorthand)
 dsh plugin --profile web add In-clude/dsh-approval-reminder
 
-# 2) From a local directory (development)
+# 3) From a local directory (development)
 dsh plugin --profile web add "D:\path\to\dsh-approval-reminder"
 ```
 
 ```text
-3) Or use Settings → Plugins in the DSH Web UI to install / enable / disable / remove it.
+4) Or use Settings → Plugins in the DSH Web UI to install / enable / disable / remove it.
 ```
 
 How to tell it is live: the **Notifications** page in **Settings** shows three rows — **Approval desktop notifications**, **Task-finished notifications** and **Reminder chime**. The bundle activates as one plugin entry of the current profile; usually no DSH restart is needed, and a browser reload is enough.
