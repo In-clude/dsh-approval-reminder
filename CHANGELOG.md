@@ -3,18 +3,34 @@
 本项目的显著变更记录在这里，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
-## [Unreleased]
+## [0.7.0] - 2026-11-20
+
+### Added
+
+- **页面内提醒提示音**：你正看着 DSH 页面（窗口可见且聚焦）时，出现待审批请求、待回答的
+  提问（含 `plan-review`），或（「任务完成通知」开启时）某个会话跑完一轮，也会响两声短提示音。
+  桌面通知仍只在你看不到页面时弹出，页面内不额外弹窗。同一 `sessionId + request key`
+  只提醒一次：页面内响过之后离开页面，仍会补发桌面通知；反过来，已因桌面通知提醒过的请求，
+  回到页面时不再补响页面内提示音（两个方向都不重复提醒）。提示音不依赖通知权限，
+  只依赖首次用户手势解锁的音频上下文。
+- **开关**：设置 → 通知提醒 新增「页面内提醒提示音」行（`role="switch"`、`aria-checked`），
+  **默认开启**，开关值存在本机浏览器 `localStorage` 的 `dsh-approval-reminder:in-page-chime`；
+  行内带「试听提示音」按钮，点击即播放两声并顺带解锁音频上下文。
+
+### Changed
+
+- 设置 → 通知提醒 现在按顺序是四行：「审批桌面通知」「任务完成通知」「提醒提示音」
+  「页面内提醒提示音」。
+- 文档：README（中文/英文同步）安装章节新增 npm 安装方式，编号顺延为
+  1) npm / 2) GitHub 简写 / 3) 本地目录。
+- 文档：README（中文/英文同步）更新提醒时机、页面内提示音、排查字段与已知限制。
+
+## [0.6.0] - 2026-10-31
 
 ### Added
 
 - 已发布到 npm：`dsh-approval-reminder@0.6.0`（npm staged publishing，2FA 放行后上线），
   可直接用 `dsh plugin --profile web add dsh-approval-reminder` 安装已发布版本。
-
-### Changed
-
-- 文档：README（中文/英文同步）安装章节新增 npm 安装方式，编号顺延为 1) npm / 2) GitHub 简写 / 3) 本地目录。
-
-## [0.6.0] - 2026-10-31
 
 ### Changed
 

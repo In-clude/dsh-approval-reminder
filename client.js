@@ -3,10 +3,12 @@
  * dsh-approval-reminder — browser half.
  *
  * Raises one Windows desktop notification per pending approval request or
- * per pending question the agent waits on the user to answer. The reminder only
- * observes the Client Session status snapshot published by the `uiSession`
- * service; it never joins the `approval/request` or `user-questions/request`
- * waterfall, so it cannot change an outcome.
+ * per pending question the agent waits on the user to answer, while the page is
+ * not being viewed; while it is being viewed, an optional reminder chime is the
+ * audible cue instead. The reminder only observes the Client Session status
+ * snapshot published by the `uiSession` service; it never joins the
+ * `approval/request` or `user-questions/request` waterfall, so it cannot change
+ * an outcome.
  *
  * No build step: this file is the bundle served through `dsh.client`
  * (`exports["./client"]`).
@@ -47,6 +49,8 @@ window.__ModuleLoader__.load({
       'sound.row.title': '提醒提示音',
       'sound.row.description': '有提醒时播放一声短提示音，并把桌面通知设为静音（避免响两次）；Edge 或 Windows 抑制桌面通知时也能听到。',
       'sound.row.test': '试听提示音',
+      'in-page.row.title': '页面内提醒提示音',
+      'in-page.row.description': '你正看着 DSH 页面时，出现审批、提问或任务完成也响两声短提示音（任务完成受「任务完成通知」开关控制）。',
     };
 
     /**
@@ -80,6 +84,8 @@ window.__ModuleLoader__.load({
       'sound.row.title': 'Reminder chime',
       'sound.row.description': 'Plays a short chime whenever a reminder is raised and mutes the desktop notification so it does not sound twice; it is still heard when Edge or Windows suppresses the notification.',
       'sound.row.test': 'Play the chime',
+      'in-page.row.title': 'In-page reminder chime',
+      'in-page.row.description': 'While you are looking at the DSH page, approvals, questions and task completions still play the short chime; completions follow the task-finished notification switch.',
     };
 
     /**
@@ -227,6 +233,37 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * Where the in-page reminder-chime switch is remembered (per origin). It is
+     * a separate switch from the notification chime above: it covers the case
+     * the desktop notification deliberately stays quiet — the user is looking
+     * at the page.
+     */
+    const IN_PAGE_SOUND_PREF_KEY = 'dsh-approval-reminder:in-page-chime';
+
+    /**
+     * Whether the in-page reminder chime is enabled. On by default: while the
+     * user is looking at the page no desktop toast is raised, so the chime is
+     * the only audible cue that an approval, a question or a finished task is
+     * waiting. A blocked storage read also falls back to the default (on).
+     * @returns {boolean}
+     */
+    function readInPageSoundPref() {
+      try {
+        const raw = window.localStorage.getItem(IN_PAGE_SOUND_PREF_KEY);
+        return raw === null ? true : raw === '1';
+      } catch (_error) {
+        return true;
+      }
+    }
+
+    /** @param {boolean} enabled */
+    function writeInPageSoundPref(enabled) {
+      try {
+        window.localStorage.setItem(IN_PAGE_SOUND_PREF_KEY, enabled ? '1' : '0');
+      } catch (_error) { /* private mode: keep the choice for this page only */ }
+    }
+
+    /**
      * Troubleshooting switch: set `localStorage['dsh-approval-reminder:debug'] = '1'`
      * in this browser to record why a reminder was or was not announced.
      */
@@ -286,6 +323,7 @@ window.__ModuleLoader__.load({
         dpr: typeof window === 'undefined' ? undefined : window.devicePixelRatio,
         permission: readPermission(),
         soundEnabled: readSoundPref(),
+        inPageEnabled: readInPageSoundPref(),
         doneEnabled: readDonePref(),
       };
     }
@@ -401,9 +439,10 @@ window.__ModuleLoader__.load({
     /**
      * One desktop notification per pending interaction that needs the user
      * (approval or question), keyed by Session identity and request key, plus
-     * the completion toasts. Nothing is raised while the notification
+     * the completion toasts, plus the in-page chime that covers the same events
+     * while the page is being viewed. Nothing is raised while the notification
      * permission is not granted; the next snapshot change after granting
-     * flushes the backlog.
+     * flushes the backlog (the in-page chime needs no permission at all).
      */
     class ReminderNotifier {
       /** @param {NotifierDeps} deps */
@@ -421,6 +460,13 @@ window.__ModuleLoader__.load({
          * @type {Map<string, string>}
          */
         this.delivered = new Map();
+        /**
+         * Pending requests already sounded while the page was being viewed, so
+         * the in-page chime plays once per request. Kept apart from `delivered`:
+         * leaving the page unsolved must still raise the desktop toast.
+         * @type {Map<string, string>}
+         */
+        this.chimed = new Map();
         /**
          * Last observed running state per Session: a completion is a true→false
          * transition, never a first reading, so an already idle page is silent.
@@ -449,8 +495,9 @@ window.__ModuleLoader__.load({
       /**
        * Recompute from the snapshot: close what settled or was seen, raise a
        * notification for each request the user has not been told about while
-       * the page is not being viewed, and announce Sessions that just stopped
-       * running when that reminder is enabled.
+       * the page is not being viewed (or sound the in-page chime while it is),
+       * and announce Sessions that just stopped running when that reminder is
+       * enabled.
        */
       sync() {
         if (this.status === undefined) return;
@@ -460,10 +507,11 @@ window.__ModuleLoader__.load({
         const state = reminderState();
         const pendingKinds = [...pending.values()].map((interaction) => interaction.kind);
         if (state.viewing === true) {
-          // The Host panel is on screen; a toast would be noise.
+          // The Host panel is on screen; a toast would be noise. The optional
+          // in-page chime is the audible cue instead.
           for (const sessionId of [...this.notified.keys()]) this.close(sessionId);
           for (const sessionId of [...this.doneToasts.keys()]) this.closeDone(sessionId);
-          debug('reminder skipped: page is being viewed', { ...state, pendingKinds });
+          this.announceInPage(pending, finished);
           return;
         }
         if (state.permission !== 'granted') {
@@ -503,6 +551,59 @@ window.__ModuleLoader__.load({
           chimeReady,
           soundPlayed,
         });
+      }
+
+      /**
+       * Audible reminder while the page is being viewed. The approval/question
+       * panel is already on screen and no desktop toast is raised, but the user
+       * may be reading another conversation, looking at another monitor or away
+       * from the composer — so an enabled chime sounds once per new request and
+       * once per Session that finished a turn. A request already announced by a
+       * desktop toast while the page was in the background counts as delivered
+       * and is not sounded again when the user returns. The completion cue
+       * follows the task-finished switch; the request cue is independent of the
+       * notification permission because Web Audio needs no permission.
+       * @param {Map<string, PendingInteraction>} pending
+       * @param {string[]} finished
+       */
+      announceInPage(pending, finished) {
+        const state = reminderState();
+        const enabled = this.deps.inPageChimeEnabled();
+        const chimeReady = this.deps.chimeReady();
+        const pendingKinds = [...pending.values()].map((interaction) => interaction.kind);
+        if (!enabled || !chimeReady) {
+          debug('in-page chime skipped', {
+            ...state,
+            pendingKinds,
+            enabled,
+            chimeReady,
+            finished: finished.length,
+          });
+          return;
+        }
+        let fresh = 0;
+        for (const [sessionId, interaction] of pending) {
+          const key = requestKey(sessionId, interaction);
+          if (this.chimed.get(sessionId) === key) continue;
+          // The desktop toast already announced this request while the page was
+          // in the background; coming back must not add a second alert.
+          if (this.delivered.get(sessionId) === key) {
+            this.chimed.set(sessionId, key);
+            continue;
+          }
+          this.chimed.set(sessionId, key);
+          fresh += 1;
+        }
+        let completions = 0;
+        if (readDonePref()) {
+          for (const sessionId of finished) {
+            if (this.deps.isSubagent(sessionId)) continue;
+            completions += 1;
+          }
+        }
+        if (fresh === 0 && completions === 0) return;
+        this.deps.playAlertSound();
+        debug('in-page chime played', { ...state, pendingKinds, fresh, completions });
       }
 
       /**
@@ -562,6 +663,11 @@ window.__ModuleLoader__.load({
           if (current !== undefined && requestKey(sessionId, current) === this.delivered.get(sessionId)) continue;
           this.delivered.delete(sessionId);
         }
+        for (const sessionId of [...this.chimed.keys()]) {
+          const current = pending.get(sessionId);
+          if (current !== undefined && requestKey(sessionId, current) === this.chimed.get(sessionId)) continue;
+          this.chimed.delete(sessionId);
+        }
       }
 
       /**
@@ -610,6 +716,7 @@ window.__ModuleLoader__.load({
         for (const sessionId of [...this.notified.keys()]) this.close(sessionId);
         for (const sessionId of [...this.doneToasts.keys()]) this.closeDone(sessionId);
         this.delivered.clear();
+        this.chimed.clear();
         this.running.clear();
       }
 
@@ -744,6 +851,9 @@ window.__ModuleLoader__.load({
         remove();
         if (readPermission() === 'default') void notifier.requestPermission();
         chime.unlock();
+        // Audio may have just become available, so a request that arrived while
+        // the page was being viewed (and was skipped then) can chime now.
+        notifier.sync();
       }
       document.addEventListener('pointerdown', onGesture, options);
       document.addEventListener('keydown', onGesture, options);
@@ -882,12 +992,22 @@ window.__ModuleLoader__.load({
       write: writeSoundPref,
     });
 
+    /** In-page reminder chime switch (sounds while the page is being viewed). */
+    const InPageSoundRow = createSwitchRow({
+      titleKey: 'in-page.row.title',
+      descriptionKey: 'in-page.row.description',
+      testLabelKey: 'sound.row.test',
+      read: readInPageSoundPref,
+      write: writeInPageSoundPref,
+    });
+
     /**
-     * The notifications settings page: one left-nav entry that owns the three
-     * preference rows (approval notifications, task-finished notifications, and
-     * the reminder chime). All three are independent; grouping them keeps the
-     * General page focused on shell-level preferences. The page renders the
-     * shared stylesheet once, and the row components render only their content.
+     * The notifications settings page: one left-nav entry that owns the four
+     * preference rows (approval notifications, task-finished notifications, the
+     * reminder chime and the in-page reminder chime). All four are independent;
+     * grouping them keeps the General page focused on shell-level preferences.
+     * The page renders the shared stylesheet once, and the row components render
+     * only their content.
      * @param {NotificationsSectionProps} props section props: the localized `t` and the injected face.
      * @returns {import('react').ReactElement} the settings page body.
      */
@@ -902,6 +1022,7 @@ window.__ModuleLoader__.load({
         }),
         h(CompletionReminderRow, { key: 'done', t: props.t }),
         h(SoundReminderRow, { key: 'sound', t: props.t, playSound: props.playSound }),
+        h(InPageSoundRow, { key: 'in-page', t: props.t, playSound: props.playSound }),
       ]);
     }
 
@@ -909,9 +1030,10 @@ window.__ModuleLoader__.load({
     const inject = ['slots', 'locale'];
 
     /**
-     * Install the notification channel (silent while the page is being viewed),
-     * the gesture hooks (notification permission + audio unlock), the reminder
-     * chime, and the notifications settings page.
+     * Install the reminder channels (a desktop notification while the page is
+     * not being viewed, the optional in-page chime while it is), the gesture
+     * hooks (notification permission + audio unlock), and the notifications
+     * settings page.
      * @param {ClientPluginContext} ctx Client root context.
      */
     function apply(ctx) {
@@ -957,6 +1079,7 @@ window.__ModuleLoader__.load({
         },
         report,
         alertSoundEnabled: () => readSoundPref(),
+        inPageChimeEnabled: () => readInPageSoundPref(),
         chimeReady: () => chime.ready(),
         playAlertSound: () => { chime.play(); },
       };

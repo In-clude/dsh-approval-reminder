@@ -97,6 +97,8 @@ interface NotifierDeps {
   isSubagent(sessionId: string): boolean;
   /** Whether the reminder chime is enabled. */
   alertSoundEnabled(): boolean;
+  /** Whether the in-page reminder chime is enabled (sounds while the page is viewed). */
+  inPageChimeEnabled(): boolean;
   /** Whether the chime can sound right now (audio context running). */
   chimeReady(): boolean;
   /** Play the reminder chime; no-op when audio is unavailable. */
