@@ -16,7 +16,7 @@ The plugin is plain JavaScript — **no runtime dependencies, no build step** �
 - ✅ A task finishes (the Session goes idle) → a light notification, **toggleable in Settings**
 - 🙈 **Only while you are not looking at the page**: silent while you are on the conversation, announced once you switch away or minimize
 - 🔊 **In-page reminder chime**: a pending approval, question or task completion that appears while you *are* looking at the DSH page also plays a short two-tone chime — **on by default, can be turned off in Settings**
-- 🔊 **A chime with every reminder**: a desktop notification can be dropped silently (Edge/Windows suppress it in some states, fullscreen especially). With this switch on, the plugin plays a short two-tone chime and marks the notification `silent` so it does not sound twice (**off by default; turn it on in Settings**)
+- 🔊 **Global reminder chime**: while the page is in the background or unfocused, every reminder plays a short two-tone chime. A desktop notification can be dropped silently (Edge/Windows suppress it in some states, fullscreen especially), so with this switch on the notification is marked `silent` and the chime carries the sound, so it does not sound twice (**off by default; turn it on in Settings**)
 - 🖱 Click the notification → opens that conversation and brings Edge to the front
 - 🧹 Once the request settles (answered, allowed, rejected, cancelled or withdrawn) → that notification closes
 - 🔒 Reads local state only, **never takes part in the decision and never answers for you**, makes no network request
@@ -112,7 +112,7 @@ dsh plugin --profile web add "D:\path\to\dsh-approval-reminder"
 4) Or use Settings → Plugins in the DSH Web UI to install / enable / disable / remove it.
 ```
 
-How to tell it is live: the **Notifications** page in **Settings** shows four rows — **Approval desktop notifications**, **Task-finished notifications**, **Reminder chime** and **In-page reminder chime**. The bundle activates as one plugin entry of the current profile; usually no DSH restart is needed, and a browser reload is enough.
+How to tell it is live: the **Notifications** page in **Settings** shows four rows — **Approval desktop notifications**, **Task-finished notifications**, **Global reminder chime** and **In-page reminder chime**. The bundle activates as one plugin entry of the current profile; usually no DSH restart is needed, and a browser reload is enough.
 
 ## First-time permission
 
@@ -131,7 +131,7 @@ If you accidentally pressed “Block”: click the site icon at the left of Edge
 - **Real check**: any tool call that needs approval triggers it. If you are looking at the page it deliberately stays silent (with **In-page reminder chime** on, it chimes once) — switch the window away and the pending request is announced.
 - **Question check**: have the agent call `ask_user_question` (for example, ask it to “ask me with options what I should do first today”). It also stays silent while you are looking at the page (with **In-page reminder chime** on, it chimes once); switch the window away and the pending question is announced with the title “A choice is needed”.
 - **Task-finished notifications**: use the switch in Settings → Notifications → **Task-finished notifications** to enable or disable them (on by default; the choice is stored in this browser). Send a message, switch the window away, and the end of the turn raises a “Task finished” notification.
-- **Reminder chime**: the switch in Settings → Notifications → **Reminder chime** (**off by default**; turn it on when you need the audio fallback). With it on, every reminder plays a two-tone chime and the desktop notification is marked silent so it does not sound twice — the chime is still heard when the notification is suppressed (browser fullscreen, Windows suppression). With it off, notifications keep the system sound. The **Play the chime** button next to it checks the audio channel at any time (the click itself counts as the user gesture that unlocks the audio context).
+- **Global reminder chime**: the switch in Settings → Notifications → **Global reminder chime** (**off by default**; turn it on when you need the audio fallback). With it on, a reminder raised while the page is in the background or unfocused plays a two-tone chime and the desktop notification is marked silent so it does not sound twice — the chime is still heard when the notification is suppressed (browser fullscreen, Windows suppression). With it off, notifications keep the system sound. The **Play the chime** button next to it checks the audio channel at any time (the click itself counts as the user gesture that unlocks the audio context).
 - **In-page reminder chime**: the switch in Settings → Notifications → **In-page reminder chime** (**on by default**; the choice is stored in this browser's `localStorage` under `dsh-approval-reminder:in-page-chime`). While you are looking at the page (the window is visible and focused), a pending approval, a pending question or a task completion plays a short two-tone chime and no desktop notification is raised; a completion stays silent when **Task-finished notifications** is off. It does not need notification permission, but it does need the audio context unlocked by the first click or key press; the **Play the chime** button next to it checks the audio channel at any time.
 - **Troubleshooting "no notice / no sound"**: in the DSH page, open F12 → Console and run `localStorage.setItem('dsh-approval-reminder:debug','1')` (clear it with `localStorage.removeItem('dsh-approval-reminder:debug')` when done). Every reminder decision is then written to this tab's `sessionStorage` (key `dsh-approval-reminder:log`, up to 100 entries) and mirrored to the console. **After** reproducing, read it back with the command below — DevTools does not have to be open while the event happens:
 
@@ -150,7 +150,7 @@ While the browser is fullscreen (F11, web-fullscreen video, a presentation), a m
 
 1. **Windows' automatic Do Not Disturb**: Windows 11 turns DND on by default “when using an app in full-screen mode”, and DND silently drops every notification (not just web ones). Open **Settings → System → Notifications → Automatically turn on Do Not Disturb** and clear **“When using an app in full-screen mode”**; clear “When duplicating my display”, “When playing a game” and “For the first hour after Windows updates” too if you want them out of the way.
 2. **DND / Focus assist turned on manually**: check the notification centre (the moon / bell icon in the taskbar) and switch it off.
-3. **Turn on the reminder chime** (the fullscreen fallback, **off by default**): DSH **Settings → Notifications → Reminder chime**. With it on, every reminder plays a two-tone chime and the desktop notification is marked silent so it does not sound twice — even when Chromium's fullscreen blocker still suppresses the popup, you hear the sound. The **Play the chime** button confirms the audio channel first.
+3. **Turn on the global reminder chime** (the fullscreen fallback, **off by default**): DSH **Settings → Notifications → Global reminder chime**. With it on, a reminder raised outside the page plays a two-tone chime and the desktop notification is marked silent so it does not sound twice — even when Chromium's fullscreen blocker still suppresses the popup, you hear the sound. The **Play the chime** button confirms the audio channel first.
 
 If neither sound nor popup appears, open the [debug switch](#using-it-and-testing-the-channel) in the page console and read the decision log. `soundPlayed: true` with no sound and no popup means the problem is in the Windows notification layer (DND, the master notification switch, volume), not in the plugin; `chimeReady: false` means click the page once (user gesture) and try again.
 
@@ -163,7 +163,7 @@ If neither sound nor popup appears, open the [debug switch](#using-it-and-testin
 | Approval notification | `new Notification(title, { body, tag, requireInteraction: true })` with `tag = 'dsh-approval:<sessionId>'` so notifications of one Session replace each other |
 | Question notification | The same rules as an approval: the same “only while off-page” decision, the same deduplication and auto-close, `requireInteraction: true`; only the title (`A choice is needed`), the body (the first question) and `tag = 'dsh-question:<sessionId>'` differ |
 | Completion notification | `tag = 'dsh-done:<sessionId>'` without `requireInteraction` (the system may collect it); subagent Sessions are skipped; the switch lives in `localStorage` under `dsh-approval-reminder:task-finished` |
-| Reminder chime | A desktop notification can be dropped silently: Chromium suppresses popups while a browser window is fullscreen, and Windows may suppress them in other states (web-fullscreen video, for example). So, when the **switch is on and** the chime is available (the `AudioContext` was unlocked by a user gesture and is running), the notification is created `silent` and a two-tone Web Audio chime plays — the reminder sounds **exactly once** whichever channel survives; when the switch is off or audio is unavailable the notification stays audible. The switch lives in `localStorage` under `dsh-approval-reminder:chime`, **off by default** |
+| Global reminder chime | A desktop notification can be dropped silently: Chromium suppresses popups while a browser window is fullscreen, and Windows may suppress them in other states (web-fullscreen video, for example). So, when the **switch is on and** the chime is available (the `AudioContext` was unlocked by a user gesture and is running), the notification is created `silent` and a two-tone Web Audio chime plays — the reminder sounds **exactly once** whichever channel survives; when the switch is off or audio is unavailable the notification stays audible. The switch lives in `localStorage` under `dsh-approval-reminder:chime`, **off by default** |
 | In-page chime | While the page is visible and focused, no desktop notification is raised; instead the **in-page reminder chime** switch (`localStorage` under `dsh-approval-reminder:in-page-chime`, **on by default**) plays the same short Web Audio chime: a new request is deduplicated by `sessionId + request key` (a request already announced by a desktop notification does not chime again on return), a task completion follows the `running` `true → false` transition and only while **Task-finished notifications** is on, and subagent Sessions are skipped; it does not depend on notification permission, only on an unlocked `AudioContext` |
 | Click | `uiWorkspace.openSession(sessionId)` + `window.focus()` + `close()` |
 | Failure handling | A refused construction is logged under the `[approval-reminder]` console prefix and marked as attempted, so later snapshot changes do not retry it |
@@ -186,7 +186,7 @@ If neither sound nor popup appears, open the [debug switch](#using-it-and-testin
 
 | Path | Purpose |
 | --- | --- |
-| `client.js` | The browser bundle: notification channel + two kinds of reminder chime (off-page / in-page) + one notifications settings page (four rows) (core logic, first line `// @ts-check`) |
+| `client.js` | The browser bundle: notification channel + two kinds of reminder chime (global / in-page) + one notifications settings page (four rows) (core logic, first line `// @ts-check`) |
 | `index.js` | Host-half shell (makes the package an installable Loader entry) |
 | `cordis.patch.yml` | The bundle's Loader patch: inserts the `approval-reminder` row |
 | `locale/en.json`, `locale/zh.json` | Plugin card title and description |
@@ -267,7 +267,7 @@ Listing requirements: `package.json` declares `dsh.bundle`, the repository is at
 
 ## Version and changelog
 
-Current version `0.7.0`. See [CHANGELOG.md](CHANGELOG.md); the project follows semantic versioning — behaviour changes bump minor, documentation-only changes do not bump the version.
+Current version `0.7.1`. See [CHANGELOG.md](CHANGELOG.md); the project follows semantic versioning — behaviour changes bump minor, documentation-only changes do not bump the version.
 
 ## License
 

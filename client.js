@@ -46,8 +46,8 @@ window.__ModuleLoader__.load({
       'done.title': '任务完成',
       'done.row.title': '任务完成通知',
       'done.row.description': '会话运行结束（转为空闲）时提醒你；同样只在你没看这个页面时通知。',
-      'sound.row.title': '提醒提示音',
-      'sound.row.description': '有提醒时播放一声短提示音，并把桌面通知设为静音（避免响两次）；Edge 或 Windows 抑制桌面通知时也能听到。',
+      'sound.row.title': '全局提醒提示音',
+      'sound.row.description': '页面在后台或未聚焦时，出现提醒（审批、提问、任务完成）就响两声短提示音，并把桌面通知设为静音，避免响两次；即使 Edge 或 Windows 抑制了桌面通知也能听到。你正看着页面时改用下面的「页面内提醒提示音」。',
       'sound.row.test': '试听提示音',
       'in-page.row.title': '页面内提醒提示音',
       'in-page.row.description': '你正看着 DSH 页面时，出现审批、提问或任务完成也响两声短提示音（任务完成受「任务完成通知」开关控制）。',
@@ -81,8 +81,8 @@ window.__ModuleLoader__.load({
       'done.title': 'Task finished',
       'done.row.title': 'Task-finished notifications',
       'done.row.description': 'Notify me when a Session stops running (goes idle); also only while I am not looking at this page.',
-      'sound.row.title': 'Reminder chime',
-      'sound.row.description': 'Plays a short chime whenever a reminder is raised and mutes the desktop notification so it does not sound twice; it is still heard when Edge or Windows suppresses the notification.',
+      'sound.row.title': 'Global reminder chime',
+      'sound.row.description': 'While this page is in the background or unfocused, every reminder (approval, question, task completion) plays the short two-tone chime and mutes the desktop notification so it cannot sound twice; it is still heard when Edge or Windows suppresses the notification. While you are looking at the page, the in-page reminder chime below takes over.',
       'sound.row.test': 'Play the chime',
       'in-page.row.title': 'In-page reminder chime',
       'in-page.row.description': 'While you are looking at the DSH page, approvals, questions and task completions still play the short chime; completions follow the task-finished notification switch.',
@@ -983,7 +983,7 @@ window.__ModuleLoader__.load({
       write: writeDonePref,
     });
 
-    /** Reminder chime switch (the audio alert that survives dropped toasts). */
+    /** Global reminder chime switch (the audio alert that survives dropped toasts). */
     const SoundReminderRow = createSwitchRow({
       titleKey: 'sound.row.title',
       descriptionKey: 'sound.row.description',
